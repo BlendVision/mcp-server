@@ -1,0 +1,61 @@
+{
+  "name": "@blendvision/mcp-server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for BlendVision One API",
+  "type": "module",
+  "main": "./build/index.js",
+  "bin": {
+    "blendvision-mcp": "./build/index.js",
+    "blendvision-connector": "./build/connector.js"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "blendvision",
+    "video",
+    "streaming",
+    "vod",
+    "live",
+    "ai",
+    "claude"
+  ],
+  "author": "BlendVision",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blendvision/mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/blendvision/mcp-server/issues"
+  },
+  "homepage": "https://github.com/blendvision/mcp-server#readme",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "dev": "tsx src/index.ts",
+    "dev:connector": "tsx src/connector.ts",
+    "inspector": "mcp-inspector",
+    "install:claude": "./scripts/install-claude-desktop.sh",
+    "test:connection": "./scripts/test-api-connection.sh",
+    "check:package": "./scripts/check-package.sh",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "axios": "^1.7.9",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

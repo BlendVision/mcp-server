@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "blendvision": {
+      "command": "node",
+      "args": ["build/index.js"],
+      "env": {
+        "BLENDVISION_API_TOKEN": "your_api_token_here"
+      },
+      "description": "BlendVision One API MCP Server - Manage VOD, live streaming, chatrooms, and analytics. Note: orgId can be provided per-request via tool parameters."
+    }
+  }
+}
