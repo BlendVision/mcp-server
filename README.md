@@ -70,7 +70,7 @@ npm run build
 
 ```bash
 cp .mcp.json.example .mcp.json
-# Edit .mcp.json and add your BLENDVISION_API_TOKEN and BLENDVISION_ORG_ID
+# Edit .mcp.json and add your BLENDVISION_API_TOKEN
 ```
 
 4. Open this project directory in Claude Code:
@@ -95,92 +95,26 @@ npm run build
 
 ## Configuration
 
-Set the following environment variables:
+Set the following environment variable:
 
 ```bash
 export BLENDVISION_API_TOKEN="your_api_token"
-export BLENDVISION_ORG_ID="your_organization_id"
 export BLENDVISION_BASE_URL="https://api.one.blendvision.com"  # Optional
 ```
 
-### Obtaining API Token and Organization ID
+### Obtaining API Token
 
-To get your credentials:
+To get your API token:
 
 1. Login to your BlendVision console
 2. Navigate to [Developers > API Tokens](https://app.one.blendvision.com/en/developers/api-token)
 3. Click on **Create New API Token**
 4. Set the **Expiration Date**
-5. Copy the `API Token` and `Organization ID` from the dialog
+5. Copy the `API Token` from the dialog
 
 ## Deployment
 
-MCP servers can be deployed in several ways depending on your use case.
-
-### Option 1: Local Development (Recommended for Testing)
-
-Run the server locally on your machine:
-
-```bash
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Run in development mode
-npm run dev
-```
-
-### Option 2: Claude Desktop Integration (Most Common)
-
-Integrate with Claude Desktop for personal use.
-
-#### Quick Installation (macOS)
-
-Use the automated installation script:
-
-```bash
-npm run install:claude
-```
-
-This script will automatically:
-- Build the project
-- Prompt for your API credentials
-- Configure Claude Desktop
-- Create a backup of existing config
-
-#### Manual Installation
-
-1. Build the project:
-
-```bash
-npm install
-npm run build
-```
-
-2. Add to your Claude Desktop configuration file:
-   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "blendvision": {
-      "command": "node",
-      "args": ["/absolute/path/to/bv4dev/mcp-server/build/index.js"],
-      "env": {
-        "BLENDVISION_API_TOKEN": "your_api_token_here",
-        "BLENDVISION_ORG_ID": "your_org_id_here"
-      }
-    }
-  }
-}
-```
-
-3. Restart Claude Desktop
-
-### Option 3: NPM Package (Recommended for Easy Installation)
+### NPM Package (Recommended for Easy Installation)
 
 #### Installing from npm
 
@@ -206,8 +140,7 @@ After installation, configure Claude Desktop (`~/Library/Application Support/Cla
       "command": "npx",
       "args": ["-y", "@blendvision/mcp-server"],
       "env": {
-        "BLENDVISION_API_TOKEN": "your_token_here",
-        "BLENDVISION_ORG_ID": "your_org_id_here"
+        "BLENDVISION_API_TOKEN": "your_token_here"
       }
     }
   }
@@ -221,8 +154,7 @@ After installation, configure Claude Desktop (`~/Library/Application Support/Cla
     "blendvision": {
       "command": "blendvision-mcp",
       "env": {
-        "BLENDVISION_API_TOKEN": "your_token_here",
-        "BLENDVISION_ORG_ID": "your_org_id_here"
+        "BLENDVISION_API_TOKEN": "your_token_here"
       }
     }
   }
@@ -242,37 +174,7 @@ For maintainers who want to publish this package:
    npm publish --access public
    ```
 
-### Option 4: Docker Container (For Production)
-
-Run as a containerized service:
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --production
-COPY . .
-RUN npm run build
-CMD ["node", "build/index.js"]
-```
-
-Build and run:
-```bash
-docker build -t blendvision-mcp .
-docker run -e BLENDVISION_API_TOKEN=xxx -e BLENDVISION_ORG_ID=yyy blendvision-mcp
-```
-
-### Option 5: Remote MCP Server (For Team Sharing)
-
-Deploy as a remote service using MCP's HTTP/SSE transport:
-
-1. Deploy to a server (AWS, GCP, etc.)
-2. Expose via HTTP endpoint
-3. Configure client to connect to remote URL
-
-This requires additional setup with reverse proxy and authentication.
-
-### Testing with MCP Inspector
+## Testing with MCP Inspector
 
 Test your server before deployment:
 
@@ -288,7 +190,6 @@ Before using the MCP server, verify your credentials work with the BlendVision A
 
 ```bash
 export BLENDVISION_API_TOKEN="your_token"
-export BLENDVISION_ORG_ID="your_org_id"
 npm run test:connection
 ```
 
@@ -317,8 +218,9 @@ https://developers.blendvision.com/docs/category/bv-one-api
 The server uses BlendVision's API Token authentication. It automatically:
 
 1. Adds your API Token as a Bearer token in the Authorization header
-2. Includes your Organization ID in the `x-bv-org-id` header
-3. All API requests are authenticated with these credentials
+2. All API requests are authenticated with your credentials
+
+Note: Organization ID can be optionally provided per-request if needed for multi-organization scenarios.
 
 ## Error Handling
 
