@@ -18,6 +18,7 @@ import {
   ChatroomTools,
   AccountTools,
   ClipsTools,
+  LibraryTools,
 } from './tools/index.js';
 
 // Environment configuration
@@ -42,6 +43,7 @@ const analyticsTools = new AnalyticsTools(client);
 const chatroomTools = new ChatroomTools(client);
 const accountTools = new AccountTools(client);
 const clipsTools = new ClipsTools(client);
+const libraryTools = new LibraryTools(client);
 
 // Register all tools
 VODTools.registerTools(registry, vodTools);
@@ -50,6 +52,7 @@ AnalyticsTools.registerTools(registry, analyticsTools);
 ChatroomTools.registerTools(registry, chatroomTools);
 AccountTools.registerTools(registry, accountTools);
 ClipsTools.registerTools(registry, clipsTools);
+LibraryTools.registerTools(registry, libraryTools);
 
 // Create MCP server
 const server = new Server(

@@ -244,4 +244,16 @@ export class BlendVisionClient {
     const { orgId, ...queryParams } = params;
     return this.request('GET', '/bv/cms/v1/auto-tagging', undefined, { params: queryParams, orgId });
   }
+
+  // Library File API Methods
+  async uploadFile(data: any, orgId?: string) {
+    // Wrap the data in a 'file' object as required by the API
+    const requestBody = { file: data };
+    return this.request('POST', '/bv/cms/v1/library/files:upload', requestBody, { orgId });
+  }
+
+  async completeUploadFile(fileId: string, completeData: any, orgId?: string) {
+    const requestBody = { complete_data: completeData };
+    return this.request('POST', `/bv/cms/v1/library/files/${fileId}:complete-upload`, requestBody, { orgId });
+  }
 }
