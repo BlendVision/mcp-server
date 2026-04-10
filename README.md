@@ -264,7 +264,7 @@ mcp-server/
 │       ├── analytics_tools.ts # Analytics tools (5 tools)
 │       ├── chatroom_tools.ts # Chatroom tools (4 tools)
 │       ├── account_tools.ts  # Account & Playback tools (5 tools)
-│       └── clips_tools.ts    # Clips & Auto-tagging tools (6 tools)
+│       └── clips_tools.ts    # Clips & Auto-tagging tools (7 tools)
 ├── build/                    # Compiled output
 ├── .mcp.json.example         # MCP config template
 ├── package.json

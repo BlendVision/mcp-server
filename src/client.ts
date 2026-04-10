@@ -249,6 +249,10 @@ export class BlendVisionClient {
     return this.request('GET', '/bv/cms/v1/auto-tagging', undefined, { params: queryParams, orgId });
   }
 
+  async createAutoTagging(data: any, orgId?: string) {
+    return this.request('POST', '/bv/cms/v1/auto-tagging', data, { orgId });
+  }
+
   // Library File API Methods
   async uploadFile(data: any, orgId?: string) {
     // Wrap the data in a 'file' object as required by the API

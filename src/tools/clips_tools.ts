@@ -129,6 +129,59 @@ export class ClipsTools extends BaseTool {
       },
       async (params) => instance.getAutoTagging(params)
     );
+
+    registry.register(
+      {
+        name: 'create_auto_tagging',
+        description: 'Create auto-tagging for a VOD video source. Auto-tagging analyzes video content to generate metadata tags.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            source: {
+              type: 'object',
+              description: 'Source video information (required)',
+              properties: {
+                id: {
+                  type: 'string',
+                  description: 'VOD identifier (required)'
+                },
+                type: {
+                  type: 'string',
+                  description: 'Source type (required)',
+                  enum: ['AUTO_TAGGING_SOURCE_TYPE_VOD'],
+                  default: 'AUTO_TAGGING_SOURCE_TYPE_VOD'
+                }
+              },
+              required: ['id', 'type']
+            },
+            subtitle_id: {
+              type: 'string',
+              description: 'Subtitle file ID (conditional - required if analyze_by is SUBTITLE_AND_AUDIO or only SUBTITLE)'
+            },
+            content_type: {
+              type: 'string',
+              description: 'Content type for analysis (optional)',
+              enum: ['slide', 'ec', 'news']
+            },
+            content_topics: {
+              type: 'array',
+              description: 'Array of content topics (optional)',
+              items: {
+                type: 'string'
+              }
+            },
+            analyze_by: {
+              type: 'string',
+              description: 'Analysis method (optional)',
+              enum: ['VISUAL', 'AUDIO', 'SUBTITLE_AND_AUDIO']
+            },
+            ...orgIdProperty,
+          },
+          required: ['source'],
+        },
+      },
+      async (params) => instance.createAutoTagging(params)
+    );
   }
 
   async listClips(params: any) {
@@ -193,6 +246,16 @@ export class ClipsTools extends BaseTool {
         ...(params.orgId && { orgId: params.orgId }),
       };
       const result = await this.client.getAutoTagging(autoTaggingParams);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async createAutoTagging(params: any) {
+    try {
+      const { orgId, ...autoTaggingData } = params;
+      const result = await this.client.createAutoTagging(autoTaggingData, orgId);
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError(error);
