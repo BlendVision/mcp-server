@@ -96,7 +96,9 @@ export class BlendVisionClient {
   }
 
   async createLiveChannel(data: any, orgId?: string) {
-    return this.request('POST', '/bv/cms/v1/lives', data, { orgId });
+    // Wrap the data in a 'live' object as required by the API
+    const requestBody = { live: data };
+    return this.request('POST', '/bv/cms/v1/lives', requestBody, { orgId });
   }
 
   async updateLiveChannel(channelId: string, data: any, orgId?: string) {
@@ -113,6 +115,14 @@ export class BlendVisionClient {
 
   async stopLive(channelId: string, orgId?: string) {
     return this.request('POST', `/bv/cms/v1/lives/${channelId}:end`, undefined, { orgId });
+  }
+
+  async cancelLive(channelId: string, orgId?: string) {
+    return this.request('POST', `/bv/cms/v1/lives/${channelId}:cancel`, {}, { orgId });
+  }
+
+  async archiveLive(channelId: string, orgId?: string) {
+    return this.request('POST', `/bv/cms/v1/lives/${channelId}:archive`, {}, { orgId });
   }
 
   // Chatroom API Methods

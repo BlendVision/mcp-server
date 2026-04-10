@@ -30,6 +30,8 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `delete_live_channel` - Delete a channel
 - `start_live` - Start live streaming
 - `stop_live` - Stop live streaming
+- `cancel_live_channel` - Cancel and archive a live stream
+- `archive_live_channel` - Archive a live stream permanently
 
 #### Chatroom Tools
 - `list_chatrooms` - List all chatrooms
@@ -251,7 +253,7 @@ mcp-server/
 │       ├── base_tool.ts      # Base class with retry & pagination
 │       ├── tool_registry.ts  # Central tool registration
 │       ├── vod_tools.ts      # VOD tools (5 tools)
-│       ├── live_tools.ts     # Live streaming tools (7 tools)
+│       ├── live_tools.ts     # Live streaming tools (9 tools)
 │       ├── analytics_tools.ts # Analytics tools (5 tools)
 │       ├── chatroom_tools.ts # Chatroom tools (4 tools)
 │       ├── account_tools.ts  # Account & Playback tools (5 tools)
