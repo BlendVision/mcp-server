@@ -85,6 +85,10 @@ export class BlendVisionClient {
     return this.request('DELETE', `/bv/cms/v1/vods/${videoId}`, undefined, { orgId });
   }
 
+  async updateVodSubtitles(videoId: string, data: any, orgId?: string) {
+    return this.request('PUT', `/bv/cms/v1/vods/${videoId}/subtitles`, data, { orgId });
+  }
+
   // Live API Methods
   async listLiveChannels(params?: { page?: number; pageSize?: number; orgId?: string }) {
     const { orgId, ...queryParams } = params || {};

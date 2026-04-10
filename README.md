@@ -22,6 +22,7 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `create_video` - Create a new video
 - `update_video` - Update video metadata
 - `delete_video` - Delete a video
+- `update_vod_subtitles` - Update subtitles for a VOD video
 
 #### Live Streaming Tools
 - `list_live_channels` - List all live channels
@@ -257,7 +258,7 @@ mcp-server/
 │       ├── index.ts          # Tool module exports
 │       ├── base_tool.ts      # Base class with retry & pagination
 │       ├── tool_registry.ts  # Central tool registration
-│       ├── vod_tools.ts      # VOD tools (5 tools)
+│       ├── vod_tools.ts      # VOD tools (6 tools)
 │       ├── live_tools.ts     # Live streaming tools (9 tools)
 │       ├── library_tools.ts  # Library & file upload tools (2 tools)
 │       ├── analytics_tools.ts # Analytics tools (5 tools)
