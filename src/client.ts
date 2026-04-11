@@ -253,6 +253,23 @@ export class BlendVisionClient {
     return this.request('POST', '/bv/cms/v1/auto-tagging', data, { orgId });
   }
 
+  // Meeting API Methods
+  async createMeeting(data: any, orgId?: string) {
+    return this.request('POST', '/bv/cms/v1/meetings', data, { orgId });
+  }
+
+  async getMeeting(meetingId: string, orgId?: string) {
+    return this.request('GET', `/bv/cms/v1/meetings/${meetingId}`, undefined, { orgId });
+  }
+
+  async getMeetingSessionInfo(meetingId: string, orgId?: string) {
+    return this.request('GET', `/bv/cms/v1/meetings/${meetingId}/sessions`, undefined, { orgId });
+  }
+
+  async archiveMeeting(meetingId: string, orgId?: string) {
+    return this.request('POST', `/bv/cms/v1/meetings/${meetingId}:archive`, {}, { orgId });
+  }
+
   // Library File API Methods
   async uploadFile(data: any, orgId?: string) {
     // Wrap the data in a 'file' object as required by the API
