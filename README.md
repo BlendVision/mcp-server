@@ -56,89 +56,21 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 #### Analytics Tools
 - `get_analytics` - Retrieve analytics reports
 
-## Quick Start with Claude Code
+## Quick Start
 
-### Option 1: Auto-Detection (Recommended)
-
-1. Clone this repository:
+### Step 1: Install
 
 ```bash
-git clone https://github.com/blendvision/mcp-server.git
-cd mcp-server
-```
-
-2. Install dependencies and build:
-
-```bash
-npm install
-npm run build
-```
-
-3. Configure your credentials:
-
-```bash
-cp .mcp.json.example .mcp.json
-# Edit .mcp.json and add your BLENDVISION_API_TOKEN
-```
-
-4. Open this project directory in Claude Code:
-   - The `.mcp.json` config will be auto-detected
-   - All 35+ tools become available immediately
-
-### Option 2: Manual Registration
-
-Add manually via command line:
-
-```bash
-claude mcp add --transport stdio --scope project blendvision \
-  -- node /path/to/mcp-server/build/index.js
-```
-
-## Installation
-
-```bash
-npm install
-npm run build
-```
-
-## Configuration
-
-Set the following environment variable:
-
-```bash
-export BLENDVISION_API_TOKEN="your_api_token"
-export BLENDVISION_BASE_URL="https://api.one.blendvision.com"  # Optional
-```
-
-### Obtaining API Token
-
-To get your API token:
-
-1. Login to your BlendVision console
-2. Navigate to [Developers > API Tokens](https://app.one.blendvision.com/en/developers/api-token)
-3. Click on **Create New API Token**
-4. Set the **Expiration Date**
-5. Copy the `API Token` from the dialog
-
-## Deployment
-
-### NPM Package (Recommended for Easy Installation)
-
-#### Installing from npm
-
-Once published to npm, users can install directly:
-
-```bash
-# Global installation
-npm install -g @blendvision/mcp-server
-
-# Or use with npx (no installation required)
+# Using npx (no installation required)
 npx @blendvision/mcp-server
+
+# Or install globally
+npm install -g @blendvision/mcp-server
 ```
 
-#### Claude Desktop Configuration
+### Step 2: Configure Claude Desktop
 
-After installation, configure Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Edit your Claude Desktop config file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
 **Using npx (recommended - always uses latest version):**
 ```json
@@ -169,42 +101,20 @@ After installation, configure Claude Desktop (`~/Library/Application Support/Cla
 }
 ```
 
-#### Publishing to npm
+### Step 3: Configure Claude Code
 
-For maintainers who want to publish this package:
-
-1. See [PUBLISHING.md](PUBLISHING.md) for detailed instructions
-2. Quick publish:
-
-   ```bash
-   npm login
-   npm run build
-   npm publish --access public
-   ```
-
-## Testing with MCP Inspector
-
-Test your server before deployment:
+Add manually via command line:
 
 ```bash
-npm run inspector
+claude mcp add --transport stdio --scope user blendvision \
+  -- npx -y @blendvision/mcp-server
 ```
 
-This opens a web interface to test all available tools.
-
-### Testing API Connection
-
-Before using the MCP server, verify your credentials work with the BlendVision API:
+Then set your API token as an environment variable:
 
 ```bash
-export BLENDVISION_API_TOKEN="your_token"
-npm run test:connection
+export BLENDVISION_API_TOKEN="your_token_here"
 ```
-
-This will test connectivity to:
-- Account API
-- Organization API
-- CMS API (Videos)
 
 ## Example Queries
 
@@ -221,134 +131,14 @@ Once connected to an MCP client like Claude, you can ask:
 This MCP server wraps the BlendVision One API. For detailed API documentation, visit:
 https://developers.blendvision.com/docs/category/bv-one-api
 
-## Authentication
-
-The server uses BlendVision's API Token authentication. It automatically:
-
-1. Adds your API Token as a Bearer token in the Authorization header
-2. All API requests are authenticated with your credentials
-
-Note: Organization ID can be optionally provided per-request if needed for multi-organization scenarios.
-
-## Error Handling
-
-The server returns structured error responses:
-
-```json
-{
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human readable error message",
-    "details": {}
-  }
-}
-```
-
-## Development
-
-### Project Structure
-
-```
-mcp-server/
-├── src/
-│   ├── index.ts              # Main MCP server (protocol handler)
-│   ├── client.ts             # BlendVision API client
-│   ├── types.ts              # TypeScript type definitions
-│   └── tools/                # Modular tool organization
-│       ├── index.ts          # Tool module exports
-│       ├── base_tool.ts      # Base class with retry & pagination
-│       ├── tool_registry.ts  # Central tool registration
-│       ├── vod_tools.ts      # VOD tools (6 tools)
-│       ├── live_tools.ts     # Live streaming tools (9 tools)
-│       ├── library_tools.ts  # Library & file upload tools (2 tools)
-│       ├── analytics_tools.ts # Analytics tools (5 tools)
-│       ├── chatroom_tools.ts # Chatroom tools (4 tools)
-│       ├── account_tools.ts  # Account & Playback tools (5 tools)
-│       └── clips_tools.ts    # Clips & Auto-tagging tools (7 tools)
-├── build/                    # Compiled output
-├── .mcp.json.example         # MCP config template
-├── package.json
-├── tsconfig.json
-├── README.md
-└── ARCHITECTURE.md           # Detailed architecture docs
-```
-
-### Building
-
-```bash
-npm run build
-```
-
-### Architecture
-
-This server uses a **modular, layered architecture** for maintainability and scalability:
-
-- **Protocol Layer** (`index.ts`): Handles MCP protocol and routing
-- **Registry Layer** (`tool_registry.ts`): Central tool registration and discovery
-- **Tool Modules** (`tools/*.ts`): Domain-specific tool implementations
-- **Base Layer** (`base_tool.ts`): Shared functionality (retry, pagination, error handling)
-- **Client Layer** (`client.ts`): HTTP communication with BlendVision API
-
-For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
-
-### Adding New Tools
-
-To add support for additional BlendVision API endpoints:
-
-1. **Create a tool module** in `src/tools/` (e.g., `meeting_tools.ts`)
-2. **Extend BaseTool** and implement your methods
-3. **Register tools** using the `registerTools()` static method
-4. **Export** from `src/tools/index.ts`
-5. **Initialize** in `src/index.ts`
-
-Example:
-
-```typescript
-// src/tools/meeting_tools.ts
-import { BaseTool } from './base_tool.js';
-
-export class MeetingTools extends BaseTool {
-  static registerTools(registry, instance) {
-    registry.register({
-      name: 'create_meeting',
-      description: 'Create a new meeting',
-      inputSchema: { /* ... */ }
-    }, async (params) => instance.createMeeting(params));
-  }
-
-  async createMeeting(params) {
-    // Use this.client, this.retry(), this.formatResponse()
-  }
-}
-```
-
-No need to modify existing code - the registry handles everything!
-
-## Extending to Full API Coverage
-
-This implementation currently covers the most commonly used endpoints. To add the remaining API categories:
-
-### Remaining Categories
-- AiSK (AI-powered streaming)
-- Billing
-- Word Filter
-- Sticker
-- Library
-- Audio
-- Meeting
-- AOD (Audio on Demand)
-- CMS
-- Configuration
-- Pricing
-
-Follow the same pattern as existing tools to add these categories.
-
 ## License
 
 MIT
 
-## Support
+## Contact Us
 
-For issues or questions:
-- BlendVision API Documentation: https://developers.blendvision.com
-- MCP Protocol: https://modelcontextprotocol.io
+To obtain your **API Token** or if you have any questions, please reach out to us:
+
+- **Email**: [support@blendvision.com](mailto:support@blendvision.com)
+- **Website**: [https://www.blendvision.com](https://www.blendvision.com)
+- **API Documentation**: [https://developers.blendvision.com](https://developers.blendvision.com)
