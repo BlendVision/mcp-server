@@ -89,6 +89,18 @@ export class BlendVisionClient {
     return this.request('PUT', `/bv/cms/v1/vods/${videoId}/subtitles`, data, { orgId });
   }
 
+  async createVodDownload(vodId: string, data: any, orgId?: string) {
+    return this.request('POST', `/bv/cms/v1/vods/${vodId}/downloads`, data, { orgId });
+  }
+
+  async getVodDownload(vodId: string, downloadId: string, orgId?: string) {
+    return this.request('GET', `/bv/cms/v1/vods/${vodId}/downloads/${downloadId}`, undefined, { orgId });
+  }
+
+  async listVodDownloads(vodId: string, orgId?: string) {
+    return this.request('GET', `/bv/cms/v1/vods/${vodId}/downloads`, undefined, { orgId });
+  }
+
   // Live API Methods
   async listLiveChannels(params?: { page?: number; pageSize?: number; orgId?: string }) {
     const { orgId, ...queryParams } = params || {};

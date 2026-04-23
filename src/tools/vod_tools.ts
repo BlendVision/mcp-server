@@ -405,6 +405,74 @@ export class VODTools extends BaseTool {
       },
       async (params) => instance.updateVodSubtitles(params)
     );
+
+    // Create VOD download tool
+    registry.register(
+      {
+        name: 'create_vod_download',
+        description: 'Trigger a remux of the specified VOD rendition (identified by profile_id) to a standalone MP4 file stored in Library. The response includes a vod_download.id for polling status. When status reaches "Done", use the vod_download.library_id with the file download endpoint to obtain a presigned URL.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            vodId: {
+              type: 'string',
+              description: 'The VOD resource ID (required)'
+            },
+            profile_id: {
+              type: 'string',
+              description: 'The profile ID identifying which rendition to download (required)'
+            },
+            ...orgIdProperty,
+          },
+          required: ['vodId', 'profile_id'],
+        },
+      },
+      async (params) => instance.createVodDownload(params)
+    );
+
+    // Get VOD download tool
+    registry.register(
+      {
+        name: 'get_vod_download',
+        description: 'Fetch the status and details of a specific VOD download job. Use this to poll the download status after creating a VOD download. When status reaches "Done", use the vod_download.library_id with the file download endpoint to obtain a presigned URL.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            vodId: {
+              type: 'string',
+              description: 'The VOD resource ID (required)'
+            },
+            downloadId: {
+              type: 'string',
+              description: 'The download job ID (required)'
+            },
+            ...orgIdProperty,
+          },
+          required: ['vodId', 'downloadId'],
+        },
+      },
+      async (params) => instance.getVodDownload(params)
+    );
+
+    // List VOD downloads tool
+    registry.register(
+      {
+        name: 'list_vod_downloads',
+        description: 'List all download jobs associated with a specific VOD resource.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            vodId: {
+              type: 'string',
+              description: 'The VOD resource ID (required)'
+            },
+            ...orgIdProperty,
+          },
+          required: ['vodId'],
+        },
+      },
+      async (params) => instance.listVodDownloads(params)
+    );
   }
 
   /**
@@ -463,6 +531,43 @@ export class VODTools extends BaseTool {
   async deleteVideo(params: any) {
     try {
       const result = await this.client.deleteVideo(params.videoId, params.orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * List VOD downloads
+   */
+  async listVodDownloads(params: any) {
+    try {
+      const result = await this.client.listVodDownloads(params.vodId, params.orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Get VOD download status
+   */
+  async getVodDownload(params: any) {
+    try {
+      const result = await this.client.getVodDownload(params.vodId, params.downloadId, params.orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Create VOD download
+   */
+  async createVodDownload(params: any) {
+    try {
+      const { vodId, orgId, ...downloadData } = params;
+      const result = await this.client.createVodDownload(vodId, downloadData, orgId);
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError(error);

@@ -23,6 +23,9 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `update_video` - Update video metadata
 - `delete_video` - Delete a video
 - `update_vod_subtitles` - Update subtitles for a VOD video
+- `create_vod_download` - Trigger a VOD rendition download as MP4
+- `get_vod_download` - Get status of a VOD download job
+- `list_vod_downloads` - List all download jobs for a VOD
 
 #### Live Streaming Tools
 - `list_live_channels` - List all live channels
