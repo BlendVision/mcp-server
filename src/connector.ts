@@ -12,24 +12,12 @@ import type { BlendVisionConfig } from './types.js';
 import http from 'http';
 import url from 'url';
 
-// Environment configuration
-const config: BlendVisionConfig = {
-  apiToken: process.env.BLENDVISION_API_TOKEN || '',
-  organizationId: process.env.BLENDVISION_ORG_ID || '',
-  baseUrl: process.env.BLENDVISION_BASE_URL,
-};
 
-if (!config.apiToken || !config.organizationId) {
-  throw new Error('BLENDVISION_API_TOKEN and BLENDVISION_ORG_ID environment variables are required');
-}
-
-const client = new BlendVisionClient(config);
-
-// Common property for all tools to support dynamic org_id
+// Common property for all tools to support dynamic org_id override
 const orgIdProperty = {
   orgId: {
     type: 'string',
-    description: 'Organization ID (optional - uses environment variable BLENDVISION_ORG_ID if not provided)'
+    description: 'Organization ID (optional - overrides the org_id from connection URL)'
   }
 };
 
@@ -539,239 +527,220 @@ const tools: Tool[] = [
   },
 ];
 
-// Create MCP server
-const server = new Server(
-  {
-    name: 'blendvision-mcp-server',
-    version: '0.1.0',
-  },
-  {
-    capabilities: {
-      tools: {},
+// Create a per-session MCP server with its own BlendVision client
+function createSessionServer(client: BlendVisionClient): Server {
+  const server = new Server(
+    {
+      name: 'blendvision-mcp-server',
+      version: '0.2.0',
     },
-  }
-);
-
-// Handle list tools request
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools };
-});
-
-// Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  // Type assertion for args since it comes as unknown from MCP
-  const params = args as Record<string, any>;
-
-  try {
-    let result;
-
-    switch (name) {
-      // VOD operations
-      case 'list_videos':
-        result = await client.listVideos(params);
-        break;
-      case 'get_video':
-        result = await client.getVideo(params.videoId, params.orgId);
-        break;
-      case 'create_video':
-        const { orgId: createOrgId, ...createData } = params;
-        result = await client.createVideo(createData, createOrgId);
-        break;
-      case 'update_video':
-        const { videoId, orgId: updateOrgId, ...updateData } = params;
-        result = await client.updateVideo(videoId, updateData, updateOrgId);
-        break;
-      case 'delete_video':
-        result = await client.deleteVideo(params.videoId, params.orgId);
-        break;
-
-      // VOD Download operations
-      case 'create_vod_download':
-        const { vodId: createDlVodId, orgId: createDlOrgId, ...createDlData } = params;
-        result = await client.createVodDownload(createDlVodId, createDlData, createDlOrgId);
-        break;
-      case 'get_vod_download':
-        result = await client.getVodDownload(params.vodId, params.downloadId, params.orgId);
-        break;
-      case 'list_vod_downloads':
-        result = await client.listVodDownloads(params.vodId, params.orgId);
-        break;
-
-      // Live operations
-      case 'list_live_channels':
-        result = await client.listLiveChannels(params);
-        break;
-      case 'get_live_channel':
-        result = await client.getLiveChannel(params.channelId, params.orgId);
-        break;
-      case 'create_live_channel':
-        const { orgId: liveCreateOrgId, ...liveCreateData } = params;
-        result = await client.createLiveChannel(liveCreateData, liveCreateOrgId);
-        break;
-      case 'update_live_channel':
-        const { channelId: updateChannelId, orgId: liveUpdateOrgId, ...channelUpdateData } = params;
-        result = await client.updateLiveChannel(updateChannelId, channelUpdateData, liveUpdateOrgId);
-        break;
-      case 'delete_live_channel':
-        result = await client.deleteLiveChannel(params.channelId, params.orgId);
-        break;
-      case 'start_live':
-        result = await client.startLive(params.channelId, params.orgId);
-        break;
-      case 'stop_live':
-        result = await client.stopLive(params.channelId, params.orgId);
-        break;
-
-      // Chatroom operations
-      case 'list_chatrooms':
-        result = await client.listChatrooms(params);
-        break;
-      case 'get_chatroom':
-        result = await client.getChatroom(params.chatroomId, params.orgId);
-        break;
-      case 'create_chatroom':
-        const { orgId: chatroomCreateOrgId, ...chatroomCreateData } = params;
-        result = await client.createChatroom(chatroomCreateData, chatroomCreateOrgId);
-        break;
-      case 'send_chatroom_message':
-        const { chatroomId, orgId: messageOrgId, ...messageData } = params;
-        result = await client.sendMessage(chatroomId, messageData, messageOrgId);
-        break;
-
-      // Account operations
-      case 'get_account':
-        result = await client.getAccount(params.orgId);
-        break;
-      case 'list_organizations':
-        result = await client.listOrganizations(params.orgId);
-        break;
-
-      // Playback operations
-      case 'generate_playback_token':
-        const { orgId: playbackOrgId, ...playbackData } = params;
-        result = await client.generatePlaybackToken(playbackData, playbackOrgId);
-        break;
-      case 'list_playback_codes':
-        result = await client.listPlaybackCodes(params.resourceId, params.orgId);
-        break;
-
-      // Analytics operations
-      case 'get_analytics':
-        const { orgId: analyticsOrgId, ...analyticsParams } = params;
-        result = await client.getAnalytics(analyticsParams, analyticsOrgId);
-        break;
-      case 'get_cdn_usage_report':
-        // Convert camelCase to snake_case for API
-        const cdnParams = {
-          time: params.time,
-          streaming_type: params.streamingType,
-        };
-        result = await client.getCdnUsageReport(cdnParams, params.orgId);
-        break;
-      case 'query_default_usage_charts':
-        // Convert camelCase to snake_case for API
-        const usageChartsData = {
-          start_time: params.startTime,
-          end_time: params.endTime,
-          ...(params.analyticsStreamingType && { analytics_streaming_type: params.analyticsStreamingType }),
-          ...(params.businessOrgIds && { business_org_ids: params.businessOrgIds }),
-          ...(params.timeGranularity && { time_granularity: params.timeGranularity }),
-          ...(params.usageType && { usage_type: params.usageType }),
-        };
-        result = await client.queryDefaultUsageCharts(usageChartsData, params.orgId);
-        break;
-      case 'get_user_access_chart':
-        // Convert camelCase to snake_case for API
-        const userAccessParams = {
-          start_time: params.startTime,
-          end_time: params.endTime,
-          ...(params.timeGranularity && { time_granularity: params.timeGranularity }),
-          ...(params.businessOrgIds && { business_org_ids: params.businessOrgIds }),
-        };
-        result = await client.getUserAccessChart(userAccessParams, params.orgId);
-        break;
-
-      // Clips operations
-      case 'list_clips':
-        // Convert sourceId and sourceType to dotted notation for query params
-        const clipsParams = {
-          'source.id': params.sourceId,
-          'source.type': params.sourceType,
-          ...(params.page && { page: params.page }),
-          ...(params.pageSize && { pageSize: params.pageSize }),
-          ...(params.orgId && { orgId: params.orgId }),
-        };
-        result = await client.listClips(clipsParams);
-        break;
-      case 'get_clip':
-        result = await client.getClip(params.clipId, params.orgId);
-        break;
-      case 'create_clip':
-        const { orgId: clipCreateOrgId, ...clipCreateData } = params;
-        result = await client.createClip(clipCreateData, clipCreateOrgId);
-        break;
-      case 'update_clip':
-        const { clipId, orgId: clipUpdateOrgId, ...clipUpdateData } = params;
-        result = await client.updateClip(clipId, clipUpdateData, clipUpdateOrgId);
-        break;
-      case 'delete_clip':
-        result = await client.deleteClip(params.clipId, params.orgId);
-        break;
-
-      // Auto-tagging operations
-      case 'get_auto_tagging':
-        // Convert sourceId and sourceType to dotted notation for query params
-        const autoTaggingParams = {
-          'source.id': params.sourceId,
-          'source.type': params.sourceType,
-          ...(params.orgId && { orgId: params.orgId }),
-        };
-        result = await client.getAutoTagging(autoTaggingParams);
-        break;
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+    {
+      capabilities: {
+        tools: {},
+      },
     }
+  );
 
-    if (result.error) {
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return { tools };
+  });
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    const params = args as Record<string, any>;
+
+    try {
+      let result;
+
+      switch (name) {
+        // VOD operations
+        case 'list_videos':
+          result = await client.listVideos(params);
+          break;
+        case 'get_video':
+          result = await client.getVideo(params.videoId, params.orgId);
+          break;
+        case 'create_video': {
+          const { orgId, ...createData } = params;
+          result = await client.createVideo(createData, orgId);
+          break;
+        }
+        case 'update_video': {
+          const { videoId, orgId, ...updateData } = params;
+          result = await client.updateVideo(videoId, updateData, orgId);
+          break;
+        }
+        case 'delete_video':
+          result = await client.deleteVideo(params.videoId, params.orgId);
+          break;
+
+        // VOD Download operations
+        case 'create_vod_download': {
+          const { vodId, orgId, ...dlData } = params;
+          result = await client.createVodDownload(vodId, dlData, orgId);
+          break;
+        }
+        case 'get_vod_download':
+          result = await client.getVodDownload(params.vodId, params.downloadId, params.orgId);
+          break;
+        case 'list_vod_downloads':
+          result = await client.listVodDownloads(params.vodId, params.orgId);
+          break;
+
+        // Live operations
+        case 'list_live_channels':
+          result = await client.listLiveChannels(params);
+          break;
+        case 'get_live_channel':
+          result = await client.getLiveChannel(params.channelId, params.orgId);
+          break;
+        case 'create_live_channel': {
+          const { orgId, ...data } = params;
+          result = await client.createLiveChannel(data, orgId);
+          break;
+        }
+        case 'update_live_channel': {
+          const { channelId, orgId, ...data } = params;
+          result = await client.updateLiveChannel(channelId, data, orgId);
+          break;
+        }
+        case 'delete_live_channel':
+          result = await client.deleteLiveChannel(params.channelId, params.orgId);
+          break;
+        case 'start_live':
+          result = await client.startLive(params.channelId, params.orgId);
+          break;
+        case 'stop_live':
+          result = await client.stopLive(params.channelId, params.orgId);
+          break;
+
+        // Chatroom operations
+        case 'list_chatrooms':
+          result = await client.listChatrooms(params);
+          break;
+        case 'get_chatroom':
+          result = await client.getChatroom(params.chatroomId, params.orgId);
+          break;
+        case 'create_chatroom': {
+          const { orgId, ...data } = params;
+          result = await client.createChatroom(data, orgId);
+          break;
+        }
+        case 'send_chatroom_message': {
+          const { chatroomId, orgId, ...data } = params;
+          result = await client.sendMessage(chatroomId, data, orgId);
+          break;
+        }
+
+        // Account operations
+        case 'get_account':
+          result = await client.getAccount(params.orgId);
+          break;
+        case 'list_organizations':
+          result = await client.listOrganizations(params.orgId);
+          break;
+
+        // Playback operations
+        case 'generate_playback_token': {
+          const { orgId, ...data } = params;
+          result = await client.generatePlaybackToken(data, orgId);
+          break;
+        }
+        case 'list_playback_codes':
+          result = await client.listPlaybackCodes(params.resourceId, params.orgId);
+          break;
+
+        // Analytics operations
+        case 'get_analytics': {
+          const { orgId, ...analyticsParams } = params;
+          result = await client.getAnalytics(analyticsParams, orgId);
+          break;
+        }
+        case 'get_cdn_usage_report':
+          result = await client.getCdnUsageReport({
+            time: params.time,
+            streaming_type: params.streamingType,
+          }, params.orgId);
+          break;
+        case 'query_default_usage_charts':
+          result = await client.queryDefaultUsageCharts({
+            start_time: params.startTime,
+            end_time: params.endTime,
+            ...(params.analyticsStreamingType && { analytics_streaming_type: params.analyticsStreamingType }),
+            ...(params.businessOrgIds && { business_org_ids: params.businessOrgIds }),
+            ...(params.timeGranularity && { time_granularity: params.timeGranularity }),
+            ...(params.usageType && { usage_type: params.usageType }),
+          }, params.orgId);
+          break;
+        case 'get_user_access_chart':
+          result = await client.getUserAccessChart({
+            start_time: params.startTime,
+            end_time: params.endTime,
+            ...(params.timeGranularity && { time_granularity: params.timeGranularity }),
+            ...(params.businessOrgIds && { business_org_ids: params.businessOrgIds }),
+          }, params.orgId);
+          break;
+
+        // Clips operations
+        case 'list_clips':
+          result = await client.listClips({
+            'source.id': params.sourceId,
+            'source.type': params.sourceType,
+            ...(params.page && { page: params.page }),
+            ...(params.pageSize && { pageSize: params.pageSize }),
+            ...(params.orgId && { orgId: params.orgId }),
+          });
+          break;
+        case 'get_clip':
+          result = await client.getClip(params.clipId, params.orgId);
+          break;
+        case 'create_clip': {
+          const { orgId, ...data } = params;
+          result = await client.createClip(data, orgId);
+          break;
+        }
+        case 'update_clip': {
+          const { clipId, orgId, ...data } = params;
+          result = await client.updateClip(clipId, data, orgId);
+          break;
+        }
+        case 'delete_clip':
+          result = await client.deleteClip(params.clipId, params.orgId);
+          break;
+
+        // Auto-tagging operations
+        case 'get_auto_tagging':
+          result = await client.getAutoTagging({
+            'source.id': params.sourceId,
+            'source.type': params.sourceType,
+            ...(params.orgId && { orgId: params.orgId }),
+          });
+          break;
+
+        default:
+          throw new Error(`Unknown tool: ${name}`);
+      }
+
+      if (result.error) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ error: result.error }, null, 2) }],
+          isError: true,
+        };
+      }
+
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              error: result.error,
-            }, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: JSON.stringify(result.data, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ error: { message: error instanceof Error ? error.message : 'Unknown error occurred' } }, null, 2) }],
         isError: true,
       };
     }
+  });
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result.data, null, 2),
-        },
-      ],
-    };
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            error: {
-              message: error instanceof Error ? error.message : 'Unknown error occurred',
-            },
-          }, null, 2),
-        },
-      ],
-      isError: true,
-    };
-  }
-});
+  return server;
+}
 
 // HTTP server for SSE transport
 async function main() {
@@ -793,9 +762,25 @@ async function main() {
     }
 
     if (pathname === '/sse') {
+      const query = parsedUrl.query;
+      const token = query.token as string;
+      const orgId = query.org_id as string;
+
+      if (!token) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing required query parameter: token' }));
+        return;
+      }
+
       console.error('New SSE connection established');
+      const sessionClient = new BlendVisionClient({
+        apiToken: token,
+        organizationId: orgId || '',
+        baseUrl: process.env.BLENDVISION_BASE_URL,
+      });
+      const sessionServer = createSessionServer(sessionClient);
       const transport = new SSEServerTransport('/message', res);
-      await server.connect(transport);
+      await sessionServer.connect(transport);
     } else if (pathname === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', version: '0.1.0' }));

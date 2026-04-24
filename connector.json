@@ -1,0 +1,33 @@
+{
+  "name": "blendvision",
+  "displayName": "BlendVision",
+  "description": "Access BlendVision One API for video streaming, live channels, chatrooms, analytics, and more",
+  "version": "0.1.0",
+  "author": "BlendVision",
+  "license": "MIT",
+  "homepage": "https://github.com/blendvision/mcp-server",
+  "iconUrl": "https://www.blendvision.com/favicon.ico",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "apiToken": {
+        "type": "string",
+        "title": "API Token",
+        "description": "Your BlendVision API token (get from BlendVision One console)",
+        "secret": true
+      },
+      "organizationId": {
+        "type": "string",
+        "title": "Organization ID",
+        "description": "Your BlendVision Organization ID"
+      },
+      "baseUrl": {
+        "type": "string",
+        "title": "Base URL (Optional)",
+        "description": "Custom API base URL (default: https://api.one.blendvision.com)",
+        "default": "https://api.one.blendvision.com"
+      }
+    },
+    "required": ["apiToken"]
+  }
+}
