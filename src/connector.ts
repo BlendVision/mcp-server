@@ -766,19 +766,9 @@ async function main() {
   // MCP endpoint handler for all methods
   function mcpHandler(req: express.Request, res: express.Response) {
     (async () => {
-      const token = extractToken(req);
-      if (!token) {
-        res.status(401).json({
-          jsonrpc: '2.0',
-          error: { code: -32000, message: 'Missing API token.' },
-          id: null,
-        });
-        return;
-      }
-
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-      // Existing session
+      // Existing session — no token needed, already authenticated
       if (sessionId && sessions.has(sessionId)) {
         const session = sessions.get(sessionId)!;
         await session.transport.handleRequest(req, res, req.body);
@@ -790,6 +780,17 @@ async function main() {
         res.status(404).json({
           jsonrpc: '2.0',
           error: { code: -32000, message: 'Session not found' },
+          id: null,
+        });
+        return;
+      }
+
+      // New session requires token
+      const token = extractToken(req);
+      if (!token) {
+        res.status(401).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Missing API token.' },
           id: null,
         });
         return;
