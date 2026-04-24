@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -9,8 +9,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { BlendVisionClient } from './client.js';
 import type { BlendVisionConfig } from './types.js';
-import http from 'http';
-import url from 'url';
+import express from 'express';
+import { randomUUID } from 'crypto';
 
 
 // Common property for all tools to support dynamic org_id override
@@ -742,57 +742,123 @@ function createSessionServer(client: BlendVisionClient): Server {
   return server;
 }
 
-// HTTP server for SSE transport
+// Streamable HTTP server
 async function main() {
   const PORT = process.env.PORT || 3000;
+  const app = express();
+  app.use(express.json());
 
-  const httpServer = http.createServer(async (req, res) => {
-    const parsedUrl = url.parse(req.url || '', true);
-    const pathname = parsedUrl.pathname;
+  // Store transports by session ID
+  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>();
 
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Extract token from Authorization header (Bearer token) or query param
+  function extractToken(req: express.Request): string | undefined {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      return authHeader.slice(7);
+    }
+    return req.query.token as string | undefined;
+  }
 
-    if (req.method === 'OPTIONS') {
-      res.writeHead(200);
-      res.end();
+  // POST /mcp - Main Streamable HTTP endpoint
+  app.post('/mcp', async (req, res) => {
+    const token = extractToken(req);
+    if (!token) {
+      res.status(401).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Missing API token. Provide via Authorization: Bearer <token> header or ?token= query param.' },
+        id: null,
+      });
       return;
     }
 
-    if (pathname === '/sse') {
-      const query = parsedUrl.query;
-      const token = query.token as string;
-      const orgId = query.org_id as string;
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-      if (!token) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing required query parameter: token' }));
-        return;
-      }
-
-      console.error('New SSE connection established');
-      const sessionClient = new BlendVisionClient({
-        apiToken: token,
-        organizationId: orgId || '',
-        baseUrl: process.env.BLENDVISION_BASE_URL,
-      });
-      const sessionServer = createSessionServer(sessionClient);
-      const transport = new SSEServerTransport('/message', res);
-      await sessionServer.connect(transport);
-    } else if (pathname === '/health') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok', version: '0.1.0' }));
-    } else {
-      res.writeHead(404);
-      res.end('Not Found');
+    // Existing session
+    if (sessionId && sessions.has(sessionId)) {
+      const session = sessions.get(sessionId)!;
+      await session.transport.handleRequest(req, res, req.body);
+      return;
     }
+
+    // New session: reject if session ID was provided but not found
+    if (sessionId) {
+      res.status(404).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Session not found' },
+        id: null,
+      });
+      return;
+    }
+
+    // Create new session
+    const orgId = req.query.org_id as string | undefined;
+    const client = new BlendVisionClient({
+      apiToken: token,
+      organizationId: orgId || '',
+      baseUrl: process.env.BLENDVISION_BASE_URL,
+    });
+
+    const server = createSessionServer(client);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+
+    const newSessionId = transport.sessionId;
+    if (newSessionId) {
+      sessions.set(newSessionId, { transport, server });
+    }
+
+    // Clean up on close
+    transport.onclose = () => {
+      if (newSessionId) {
+        sessions.delete(newSessionId);
+      }
+    };
+
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
   });
 
-  httpServer.listen(PORT, () => {
-    console.error(`BlendVision MCP Connector running on http://localhost:${PORT}`);
-    console.error(`SSE endpoint: http://localhost:${PORT}/sse`);
+  // GET /mcp - SSE stream for server-initiated messages
+  app.get('/mcp', async (req, res) => {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    if (!sessionId || !sessions.has(sessionId)) {
+      res.status(400).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Invalid or missing session ID' },
+        id: null,
+      });
+      return;
+    }
+    const session = sessions.get(sessionId)!;
+    await session.transport.handleRequest(req, res);
+  });
+
+  // DELETE /mcp - Close session
+  app.delete('/mcp', async (req, res) => {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    if (!sessionId || !sessions.has(sessionId)) {
+      res.status(404).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Session not found' },
+        id: null,
+      });
+      return;
+    }
+    const session = sessions.get(sessionId)!;
+    await session.transport.handleRequest(req, res);
+    sessions.delete(sessionId);
+  });
+
+  // Health check
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', version: '0.3.0' });
+  });
+
+  app.listen(PORT, () => {
+    console.error(`BlendVision MCP Server running on http://localhost:${PORT}`);
+    console.error(`MCP endpoint: http://localhost:${PORT}/mcp`);
   });
 }
 
