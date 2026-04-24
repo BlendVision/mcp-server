@@ -10,7 +10,6 @@ import {
 import { BlendVisionClient } from './client.js';
 import type { BlendVisionConfig } from './types.js';
 import express from 'express';
-import { randomUUID } from 'crypto';
 
 
 // Common property for all tools to support dynamic org_id override
@@ -748,9 +747,6 @@ async function main() {
   const app = express();
   app.use(express.json());
 
-  // Store transports by session ID
-  const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>();
-
   // Extract token from Authorization header, query param, or path param
   function extractToken(req: express.Request): string | undefined {
     const authHeader = req.headers.authorization;
@@ -763,29 +759,9 @@ async function main() {
     return req.query.token as string | undefined;
   }
 
-  // MCP endpoint handler for all methods
+  // Stateless MCP handler: each request creates a fresh server + transport
   function mcpHandler(req: express.Request, res: express.Response) {
     (async () => {
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-      // Existing session — no token needed, already authenticated
-      if (sessionId && sessions.has(sessionId)) {
-        const session = sessions.get(sessionId)!;
-        await session.transport.handleRequest(req, res, req.body);
-        return;
-      }
-
-      // Reject if session ID was provided but not found
-      if (sessionId) {
-        res.status(404).json({
-          jsonrpc: '2.0',
-          error: { code: -32000, message: 'Session not found' },
-          id: null,
-        });
-        return;
-      }
-
-      // New session requires token
       const token = extractToken(req);
       if (!token) {
         res.status(401).json({
@@ -796,17 +772,6 @@ async function main() {
         return;
       }
 
-      // Only POST can create new sessions
-      if (req.method !== 'POST') {
-        res.status(400).json({
-          jsonrpc: '2.0',
-          error: { code: -32000, message: 'Invalid or missing session ID' },
-          id: null,
-        });
-        return;
-      }
-
-      // Create new session
       const orgId = req.query.org_id as string | undefined;
       const client = new BlendVisionClient({
         apiToken: token,
@@ -816,19 +781,13 @@ async function main() {
 
       const server = createSessionServer(client);
       const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
+        sessionIdGenerator: undefined, // stateless
       });
 
-      const newSessionId = transport.sessionId;
-      if (newSessionId) {
-        sessions.set(newSessionId, { transport, server });
-      }
-
-      transport.onclose = () => {
-        if (newSessionId) {
-          sessions.delete(newSessionId);
-        }
-      };
+      res.on('close', () => {
+        transport.close();
+        server.close();
+      });
 
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
