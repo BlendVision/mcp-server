@@ -38,6 +38,7 @@
   "scripts": {
     "build": "tsc",
     "prepare": "npm run build",
+    "start": "node build/connector.js",
     "dev": "tsx src/index.ts",
     "dev:connector": "tsx src/connector.ts",
     "inspector": "mcp-inspector",
