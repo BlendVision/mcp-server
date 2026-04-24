@@ -751,105 +751,105 @@ async function main() {
   // Store transports by session ID
   const sessions = new Map<string, { transport: StreamableHTTPServerTransport; server: Server }>();
 
-  // Extract token from Authorization header (Bearer token) or query param
+  // Extract token from Authorization header, query param, or path param
   function extractToken(req: express.Request): string | undefined {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       return authHeader.slice(7);
     }
+    if (req.params.token) {
+      return req.params.token as string;
+    }
     return req.query.token as string | undefined;
   }
 
-  // POST /mcp - Main Streamable HTTP endpoint
-  app.post('/mcp', async (req, res) => {
-    const token = extractToken(req);
-    if (!token) {
-      res.status(401).json({
-        jsonrpc: '2.0',
-        error: { code: -32000, message: 'Missing API token. Provide via Authorization: Bearer <token> header or ?token= query param.' },
-        id: null,
-      });
-      return;
-    }
-
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-    // Existing session
-    if (sessionId && sessions.has(sessionId)) {
-      const session = sessions.get(sessionId)!;
-      await session.transport.handleRequest(req, res, req.body);
-      return;
-    }
-
-    // New session: reject if session ID was provided but not found
-    if (sessionId) {
-      res.status(404).json({
-        jsonrpc: '2.0',
-        error: { code: -32000, message: 'Session not found' },
-        id: null,
-      });
-      return;
-    }
-
-    // Create new session
-    const orgId = req.query.org_id as string | undefined;
-    const client = new BlendVisionClient({
-      apiToken: token,
-      organizationId: orgId || '',
-      baseUrl: process.env.BLENDVISION_BASE_URL,
-    });
-
-    const server = createSessionServer(client);
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-    });
-
-    const newSessionId = transport.sessionId;
-    if (newSessionId) {
-      sessions.set(newSessionId, { transport, server });
-    }
-
-    // Clean up on close
-    transport.onclose = () => {
-      if (newSessionId) {
-        sessions.delete(newSessionId);
+  // MCP endpoint handler for all methods
+  function mcpHandler(req: express.Request, res: express.Response) {
+    (async () => {
+      const token = extractToken(req);
+      if (!token) {
+        res.status(401).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Missing API token.' },
+          id: null,
+        });
+        return;
       }
-    };
 
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  });
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-  // GET /mcp - SSE stream for server-initiated messages
-  app.get('/mcp', async (req, res) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    if (!sessionId || !sessions.has(sessionId)) {
-      res.status(400).json({
-        jsonrpc: '2.0',
-        error: { code: -32000, message: 'Invalid or missing session ID' },
-        id: null,
+      // Existing session
+      if (sessionId && sessions.has(sessionId)) {
+        const session = sessions.get(sessionId)!;
+        await session.transport.handleRequest(req, res, req.body);
+        return;
+      }
+
+      // Reject if session ID was provided but not found
+      if (sessionId) {
+        res.status(404).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Session not found' },
+          id: null,
+        });
+        return;
+      }
+
+      // Only POST can create new sessions
+      if (req.method !== 'POST') {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Invalid or missing session ID' },
+          id: null,
+        });
+        return;
+      }
+
+      // Create new session
+      const orgId = req.query.org_id as string | undefined;
+      const client = new BlendVisionClient({
+        apiToken: token,
+        organizationId: orgId || '',
+        baseUrl: process.env.BLENDVISION_BASE_URL,
       });
-      return;
-    }
-    const session = sessions.get(sessionId)!;
-    await session.transport.handleRequest(req, res);
-  });
 
-  // DELETE /mcp - Close session
-  app.delete('/mcp', async (req, res) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-    if (!sessionId || !sessions.has(sessionId)) {
-      res.status(404).json({
-        jsonrpc: '2.0',
-        error: { code: -32000, message: 'Session not found' },
-        id: null,
+      const server = createSessionServer(client);
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
       });
-      return;
-    }
-    const session = sessions.get(sessionId)!;
-    await session.transport.handleRequest(req, res);
-    sessions.delete(sessionId);
-  });
+
+      const newSessionId = transport.sessionId;
+      if (newSessionId) {
+        sessions.set(newSessionId, { transport, server });
+      }
+
+      transport.onclose = () => {
+        if (newSessionId) {
+          sessions.delete(newSessionId);
+        }
+      };
+
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    })().catch((err) => {
+      console.error('MCP handler error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Internal server error' },
+          id: null,
+        });
+      }
+    });
+  }
+
+  // Routes: support both /mcp?token=xxx and /mcp/:token
+  app.post('/mcp', mcpHandler);
+  app.get('/mcp', mcpHandler);
+  app.delete('/mcp', mcpHandler);
+  app.post('/mcp/:token', mcpHandler);
+  app.get('/mcp/:token', mcpHandler);
+  app.delete('/mcp/:token', mcpHandler);
 
   // Health check
   app.get('/health', (_req, res) => {
