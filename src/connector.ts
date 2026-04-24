@@ -102,6 +102,46 @@ const tools: Tool[] = [
     },
   },
 
+  // VOD Download Tools
+  {
+    name: 'create_vod_download',
+    description: 'Trigger a remux of the specified VOD rendition (identified by profile_id) to a standalone MP4 file stored in Library. The response includes a vod_download.id for polling status. When status reaches "Done", use the vod_download.library_id with the file download endpoint to obtain a presigned URL.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vodId: { type: 'string', description: 'The VOD resource ID' },
+        profile_id: { type: 'string', description: 'The profile ID identifying which rendition to download' },
+        ...orgIdProperty,
+      },
+      required: ['vodId', 'profile_id'],
+    },
+  },
+  {
+    name: 'get_vod_download',
+    description: 'Fetch the status and details of a specific VOD download job. Use this to poll the download status after creating a VOD download.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vodId: { type: 'string', description: 'The VOD resource ID' },
+        downloadId: { type: 'string', description: 'The download job ID' },
+        ...orgIdProperty,
+      },
+      required: ['vodId', 'downloadId'],
+    },
+  },
+  {
+    name: 'list_vod_downloads',
+    description: 'List all download jobs associated with a specific VOD resource.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vodId: { type: 'string', description: 'The VOD resource ID' },
+        ...orgIdProperty,
+      },
+      required: ['vodId'],
+    },
+  },
+
   // Live Streaming Tools
   {
     name: 'list_live_channels',
@@ -544,6 +584,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case 'delete_video':
         result = await client.deleteVideo(params.videoId, params.orgId);
+        break;
+
+      // VOD Download operations
+      case 'create_vod_download':
+        const { vodId: createDlVodId, orgId: createDlOrgId, ...createDlData } = params;
+        result = await client.createVodDownload(createDlVodId, createDlData, createDlOrgId);
+        break;
+      case 'get_vod_download':
+        result = await client.getVodDownload(params.vodId, params.downloadId, params.orgId);
+        break;
+      case 'list_vod_downloads':
+        result = await client.listVodDownloads(params.vodId, params.orgId);
         break;
 
       // Live operations
