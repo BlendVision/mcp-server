@@ -293,6 +293,16 @@ const tools: Tool[] = [
       },
     },
   },
+  {
+    name: 'list_hierarchical_sub_organizations',
+    description: 'List all hierarchical sub-organizations under a reseller organization',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...orgIdProperty,
+      },
+    },
+  },
 
   // Playback Tools
   {
@@ -430,6 +440,37 @@ const tools: Tool[] = [
       required: ['startTime', 'endTime'],
     },
   },
+  {
+    name: 'query_usage_summary',
+    description: 'Query usage summary analytics including CDN, encoding, storage, and streaming metrics',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        startTime: {
+          type: 'string',
+          description: 'Start time in ISO format (e.g., 2026-02-25T00:00:00.000Z)',
+          format: 'date-time',
+        },
+        endTime: {
+          type: 'string',
+          description: 'End time in ISO format (e.g., 2026-03-25T00:00:00.000Z)',
+          format: 'date-time',
+        },
+        analyticsStreamingType: {
+          type: 'string',
+          description: 'Analytics streaming type',
+          enum: ['STREAMING_TYPE_UNSPECIFIED', 'STREAMING_TYPE_LIVE', 'STREAMING_TYPE_VOD', 'STREAMING_TYPE_LIVE_TO_VOD'],
+        },
+        businessOrgIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of business organization IDs',
+        },
+        ...orgIdProperty,
+      },
+      required: ['startTime', 'endTime'],
+    },
+  },
 
   // Clips Tools
   {
@@ -506,6 +547,206 @@ const tools: Tool[] = [
     },
   },
 
+  // Library File Tools
+  {
+    name: 'upload_file',
+    description: 'Initiate a file upload to BlendVision library. Returns upload session data with presigned URLs for uploading file parts.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: [
+            'FILE_TYPE_VIDEO',
+            'FILE_TYPE_IMAGE',
+            'FILE_TYPE_SUBTITLE',
+            'FILE_TYPE_DOCUMENT',
+            'FILE_TYPE_WEB_LINK',
+            'FILE_TYPE_AUDIO'
+          ],
+          description: 'File type'
+        },
+        name: {
+          type: 'string',
+          description: 'Filename'
+        },
+        size: {
+          type: 'number',
+          description: 'File size in bytes'
+        },
+        source: {
+          type: 'string',
+          enum: [
+            'FILE_SOURCE_UPLOAD_IN_LIBRARY',
+            'FILE_SOURCE_CLOUD_STORAGE_AWS',
+            'FILE_SOURCE_CLOUD_STORAGE_GCP',
+            'FILE_SOURCE_CLOUD_STORAGE_AZURE'
+          ],
+          description: 'File source (required)',
+          default: 'FILE_SOURCE_UPLOAD_IN_LIBRARY'
+        },
+        attrs: {
+          type: 'object',
+          description: 'Custom attributes as key-value pairs'
+        },
+        metadata: {
+          type: 'object',
+          description: 'File metadata',
+          properties: {
+            short_description: { type: 'string' },
+            long_description: { type: 'string' },
+            labels: {
+              type: 'array',
+              items: { type: 'string' }
+            }
+          }
+        },
+        ...orgIdProperty,
+      },
+      required: ['source'],
+    },
+  },
+  {
+    name: 'complete_file_upload',
+    description: 'Complete a file upload session after uploading all parts. This finalizes the upload process.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'The file ID returned from upload_file'
+        },
+        uploadId: {
+          type: 'string',
+          description: 'The upload session ID from upload_data.id in upload_file response'
+        },
+        parts: {
+          type: 'array',
+          description: 'Array of uploaded parts with their ETags',
+          items: {
+            type: 'object',
+            properties: {
+              part_number: {
+                type: 'number',
+                description: 'Sequential part number'
+              },
+              etag: {
+                type: 'string',
+                description: 'ETag value from presigned URL upload response'
+              }
+            },
+            required: ['part_number', 'etag']
+          }
+        },
+        checksum_sha1: {
+          type: 'string',
+          description: 'Base64-encoded SHA-1 digest (deprecated but optional)'
+        },
+        ...orgIdProperty,
+      },
+      required: ['fileId', 'uploadId', 'parts'],
+    },
+  },
+  {
+    name: 'update_file',
+    description: 'Update the details of an existing file in BlendVision library.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'The file ID to update'
+        },
+        name: {
+          type: 'string',
+          description: 'New filename'
+        },
+        metadata: {
+          type: 'object',
+          description: 'File metadata',
+          properties: {
+            short_description: { type: 'string' },
+            long_description: { type: 'string' },
+            labels: {
+              type: 'array',
+              items: { type: 'string' }
+            }
+          }
+        },
+        attrs: {
+          type: 'object',
+          description: 'Custom attributes as key-value pairs'
+        },
+        ...orgIdProperty,
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'cancel_file_upload',
+    description: 'Cancel (terminate) an in-progress file upload session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'The file ID to cancel upload for'
+        },
+        uploadId: {
+          type: 'string',
+          description: 'The upload session ID to terminate'
+        },
+        ...orgIdProperty,
+      },
+      required: ['fileId', 'uploadId'],
+    },
+  },
+  {
+    name: 'get_file',
+    description: 'Get details of a specific file in BlendVision library by ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'The file ID'
+        },
+        ...orgIdProperty,
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'delete_file',
+    description: 'Delete a file from BlendVision library.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'The file ID to delete'
+        },
+        ...orgIdProperty,
+      },
+      required: ['fileId'],
+    },
+  },
+  {
+    name: 'download_file',
+    description: 'Get a download link and its expiration time for a specified file in BlendVision library.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileId: {
+          type: 'string',
+          description: 'The file ID to download'
+        },
+        ...orgIdProperty,
+      },
+      required: ['fileId'],
+    },
+  },
+
   // Auto-tagging Tools
   {
     name: 'get_auto_tagging',
@@ -522,6 +763,221 @@ const tools: Tool[] = [
         ...orgIdProperty,
       },
       required: ['sourceId', 'sourceType'],
+    },
+  },
+  {
+    name: 'create_auto_tagging',
+    description: 'Create auto-tagging for a VOD video source. Auto-tagging analyzes video content to generate metadata tags.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'object',
+          description: 'Source video information (required)',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'VOD identifier (required)'
+            },
+            type: {
+              type: 'string',
+              description: 'Source type (required)',
+              enum: ['AUTO_TAGGING_SOURCE_TYPE_VOD'],
+              default: 'AUTO_TAGGING_SOURCE_TYPE_VOD'
+            }
+          },
+          required: ['id', 'type']
+        },
+        subtitle_id: {
+          type: 'string',
+          description: 'Subtitle file ID (conditional - required if analyze_by is SUBTITLE_AND_AUDIO or only SUBTITLE)'
+        },
+        content_type: {
+          type: 'string',
+          description: 'Content type for analysis (optional)',
+          enum: ['slide', 'ec', 'news']
+        },
+        content_topics: {
+          type: 'array',
+          description: 'Array of content topics (optional)',
+          items: { type: 'string' }
+        },
+        analyze_by: {
+          type: 'string',
+          description: 'Analysis method (optional)',
+          enum: ['VISUAL', 'AUDIO', 'SUBTITLE_AND_AUDIO']
+        },
+        ...orgIdProperty,
+      },
+      required: ['source'],
+    },
+  },
+
+  // VOD Subtitle Tools
+  {
+    name: 'update_vod_subtitles',
+    description: 'Update subtitles for a VOD video. Supports both library subtitle files and auto-generated STT subtitles.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        videoId: {
+          type: 'string',
+          description: 'The VOD resource ID (required)'
+        },
+        subtitles: {
+          type: 'array',
+          description: 'Array of library subtitle files',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Library subtitle file ID (required)' },
+              name: { type: 'string', description: 'Subtitle file name' },
+              code: { type: 'string', description: 'Language code (ISO639-1+ISO-3166-1, e.g., en-US)' },
+              display: { type: 'string', description: 'Display name for the subtitle track (required)' },
+              translate_settings: {
+                type: 'array',
+                description: 'Translation settings',
+                items: {
+                  type: 'object',
+                  properties: {
+                    source_lang_code: { type: 'string' },
+                    target_lang_code: { type: 'string' },
+                    display: { type: 'string' }
+                  },
+                  required: ['source_lang_code', 'target_lang_code', 'display']
+                }
+              }
+            },
+            required: ['id', 'display']
+          }
+        },
+        stt_subtitles: {
+          type: 'array',
+          description: 'Array of auto-generated speech-to-text subtitles',
+          items: {
+            type: 'object',
+            properties: {
+              track_no: { type: 'string', description: 'Audio track number' },
+              lang_code: { type: 'string', description: 'Language code for STT generation' },
+              display: { type: 'string', description: 'Display name for the subtitle track (required)' },
+              translate_settings: {
+                type: 'array',
+                description: 'Translation settings for STT subtitles',
+                items: {
+                  type: 'object',
+                  properties: {
+                    source_lang_code: { type: 'string' },
+                    target_lang_code: { type: 'string' },
+                    display: { type: 'string' }
+                  },
+                  required: ['source_lang_code', 'target_lang_code', 'display']
+                }
+              }
+            },
+            required: ['display']
+          }
+        },
+        ...orgIdProperty,
+      },
+      required: ['videoId'],
+    },
+  },
+
+  // Live Channel Extra Tools
+  {
+    name: 'cancel_live_channel',
+    description: 'Cancel a live streaming session. Terminates and archives the live stream. Only works when status is SCHEDULED, WAIT_FOR_PREVIEW, PREVIEW, LIVE, VOD_READY, or VOD.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channelId: { type: 'string', description: 'The channel ID to cancel' },
+        ...orgIdProperty,
+      },
+      required: ['channelId'],
+    },
+  },
+  {
+    name: 'archive_live_channel',
+    description: 'Archive a live stream, making it inaccessible for future use. Only works when status is WAIT_FOR_PREVIEW, PREVIEW, LIVE, CLOSED, or any FAIL_TO_* status.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channelId: { type: 'string', description: 'The channel ID to archive' },
+        ...orgIdProperty,
+      },
+      required: ['channelId'],
+    },
+  },
+
+  // Meeting Tools
+  {
+    name: 'create_meeting',
+    description: 'Create a new meeting with schedule configuration. Meeting duration cannot exceed 12 hours.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The meeting name'
+        },
+        schedule: {
+          type: 'object',
+          description: 'Meeting timing configuration (duration cannot exceed 12 hours)',
+          properties: {
+            started_at: {
+              type: 'string',
+              description: 'Timestamp indicating when the meeting becomes available (ISO 8601 datetime)'
+            },
+            closed_at: {
+              type: 'string',
+              description: 'Timestamp indicating when the meeting becomes unavailable (ISO 8601 datetime)'
+            }
+          },
+          required: ['started_at', 'closed_at']
+        },
+        max_participants: {
+          type: 'number',
+          description: 'Maximum allowed participants (default: 10, max: 100)'
+        },
+        ...orgIdProperty,
+      },
+      required: ['schedule'],
+    },
+  },
+  {
+    name: 'get_meeting',
+    description: 'Get details of a specific meeting by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        meetingId: { type: 'string', description: 'The unique ID of the meeting' },
+        ...orgIdProperty,
+      },
+      required: ['meetingId'],
+    },
+  },
+  {
+    name: 'get_meeting_session_info',
+    description: 'Get session information of a meeting, including participant tokens to connect. Tokens are generated when meeting status becomes MEETING_STATUS_AVAILABLE.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        meetingId: { type: 'string', description: 'The unique ID of the meeting' },
+        ...orgIdProperty,
+      },
+      required: ['meetingId'],
+    },
+  },
+  {
+    name: 'archive_meeting',
+    description: 'Archive a meeting, making it inaccessible for future use',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        meetingId: { type: 'string', description: 'The unique ID of the meeting to archive' },
+        ...orgIdProperty,
+      },
+      required: ['meetingId'],
     },
   },
 ];
@@ -638,6 +1094,9 @@ function createSessionServer(client: BlendVisionClient): Server {
         case 'list_organizations':
           result = await client.listOrganizations(params.orgId);
           break;
+        case 'list_hierarchical_sub_organizations':
+          result = await client.listHierarchicalSubOrganizations(params.orgId);
+          break;
 
         // Playback operations
         case 'generate_playback_token': {
@@ -679,6 +1138,14 @@ function createSessionServer(client: BlendVisionClient): Server {
             ...(params.businessOrgIds && { business_org_ids: params.businessOrgIds }),
           }, params.orgId);
           break;
+        case 'query_usage_summary':
+          result = await client.queryUsageSummary({
+            start_time: params.startTime,
+            end_time: params.endTime,
+            ...(params.analyticsStreamingType && { analytics_streaming_type: params.analyticsStreamingType }),
+            ...(params.businessOrgIds && { business_org_ids: params.businessOrgIds }),
+          }, params.orgId);
+          break;
 
         // Clips operations
         case 'list_clips':
@@ -707,6 +1174,40 @@ function createSessionServer(client: BlendVisionClient): Server {
           result = await client.deleteClip(params.clipId, params.orgId);
           break;
 
+        // Library File operations
+        case 'upload_file': {
+          const { orgId, ...fileData } = params;
+          result = await client.uploadFile(fileData, orgId);
+          break;
+        }
+        case 'complete_file_upload': {
+          const { fileId, uploadId, parts, checksum_sha1, orgId } = params;
+          const completeData: any = { id: uploadId, parts };
+          if (checksum_sha1) {
+            completeData.checksum_sha1 = checksum_sha1;
+          }
+          result = await client.completeUploadFile(fileId, completeData, orgId);
+          break;
+        }
+        case 'update_file': {
+          const { fileId, orgId, ...updateData } = params;
+          result = await client.updateFile(fileId, updateData, orgId);
+          break;
+        }
+        case 'cancel_file_upload': {
+          result = await client.cancelUploadFile(params.fileId, params.uploadId, params.orgId);
+          break;
+        }
+        case 'get_file':
+          result = await client.getFile(params.fileId, params.orgId);
+          break;
+        case 'delete_file':
+          result = await client.deleteFile(params.fileId, params.orgId);
+          break;
+        case 'download_file':
+          result = await client.downloadFile(params.fileId, params.orgId);
+          break;
+
         // Auto-tagging operations
         case 'get_auto_tagging':
           result = await client.getAutoTagging({
@@ -714,6 +1215,42 @@ function createSessionServer(client: BlendVisionClient): Server {
             'source.type': params.sourceType,
             ...(params.orgId && { orgId: params.orgId }),
           });
+          break;
+        case 'create_auto_tagging': {
+          const { orgId, ...autoTaggingData } = params;
+          result = await client.createAutoTagging(autoTaggingData, orgId);
+          break;
+        }
+
+        // VOD Subtitle operations
+        case 'update_vod_subtitles': {
+          const { videoId, orgId, ...subtitleData } = params;
+          result = await client.updateVodSubtitles(videoId, subtitleData, orgId);
+          break;
+        }
+
+        // Live channel extra operations
+        case 'cancel_live_channel':
+          result = await client.cancelLive(params.channelId, params.orgId);
+          break;
+        case 'archive_live_channel':
+          result = await client.archiveLive(params.channelId, params.orgId);
+          break;
+
+        // Meeting operations
+        case 'create_meeting': {
+          const { orgId, ...createData } = params;
+          result = await client.createMeeting(createData, orgId);
+          break;
+        }
+        case 'get_meeting':
+          result = await client.getMeeting(params.meetingId, params.orgId);
+          break;
+        case 'get_meeting_session_info':
+          result = await client.getMeetingSessionInfo(params.meetingId, params.orgId);
+          break;
+        case 'archive_meeting':
+          result = await client.archiveMeeting(params.meetingId, params.orgId);
           break;
 
         default:

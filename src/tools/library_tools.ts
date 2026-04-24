@@ -125,6 +125,130 @@ export class LibraryTools extends BaseTool {
       },
       async (params) => instance.completeUploadFile(params)
     );
+
+    // Update file
+    registry.register(
+      {
+        name: 'update_file',
+        description: 'Update the details of an existing file in BlendVision library.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            fileId: {
+              type: 'string',
+              description: 'The file ID to update'
+            },
+            name: {
+              type: 'string',
+              description: 'New filename'
+            },
+            metadata: {
+              type: 'object',
+              description: 'File metadata',
+              properties: {
+                short_description: { type: 'string' },
+                long_description: { type: 'string' },
+                labels: {
+                  type: 'array',
+                  items: { type: 'string' }
+                }
+              }
+            },
+            attrs: {
+              type: 'object',
+              description: 'Custom attributes as key-value pairs'
+            },
+            ...orgIdProperty,
+          },
+          required: ['fileId'],
+        },
+      },
+      async (params) => instance.updateFile(params)
+    );
+
+    // Cancel file upload
+    registry.register(
+      {
+        name: 'cancel_file_upload',
+        description: 'Cancel (terminate) an in-progress file upload session.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            fileId: {
+              type: 'string',
+              description: 'The file ID to cancel upload for'
+            },
+            uploadId: {
+              type: 'string',
+              description: 'The upload session ID to terminate'
+            },
+            ...orgIdProperty,
+          },
+          required: ['fileId', 'uploadId'],
+        },
+      },
+      async (params) => instance.cancelUploadFile(params)
+    );
+
+    // Get file
+    registry.register(
+      {
+        name: 'get_file',
+        description: 'Get details of a specific file in BlendVision library by ID.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            fileId: {
+              type: 'string',
+              description: 'The file ID'
+            },
+            ...orgIdProperty,
+          },
+          required: ['fileId'],
+        },
+      },
+      async (params) => instance.getFile(params)
+    );
+
+    // Delete file
+    registry.register(
+      {
+        name: 'delete_file',
+        description: 'Delete a file from BlendVision library.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            fileId: {
+              type: 'string',
+              description: 'The file ID to delete'
+            },
+            ...orgIdProperty,
+          },
+          required: ['fileId'],
+        },
+      },
+      async (params) => instance.deleteFile(params)
+    );
+
+    // Download file
+    registry.register(
+      {
+        name: 'download_file',
+        description: 'Get a download link and its expiration time for a specified file in BlendVision library.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            fileId: {
+              type: 'string',
+              description: 'The file ID to download'
+            },
+            ...orgIdProperty,
+          },
+          required: ['fileId'],
+        },
+      },
+      async (params) => instance.downloadFile(params)
+    );
   }
 
   async uploadFile(params: any) {
@@ -150,6 +274,56 @@ export class LibraryTools extends BaseTool {
       }
 
       const result = await this.client.completeUploadFile(fileId, completeData, orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async updateFile(params: any) {
+    try {
+      const { fileId, orgId, ...updateData } = params;
+      const result = await this.client.updateFile(fileId, updateData, orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async cancelUploadFile(params: any) {
+    try {
+      const { fileId, uploadId, orgId } = params;
+      const result = await this.client.cancelUploadFile(fileId, uploadId, orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async getFile(params: any) {
+    try {
+      const { fileId, orgId } = params;
+      const result = await this.client.getFile(fileId, orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async deleteFile(params: any) {
+    try {
+      const { fileId, orgId } = params;
+      const result = await this.client.deleteFile(fileId, orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async downloadFile(params: any) {
+    try {
+      const { fileId, orgId } = params;
+      const result = await this.client.downloadFile(fileId, orgId);
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError(error);

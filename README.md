@@ -8,11 +8,13 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 
 - **Video On Demand (VOD)**: Create, manage, and query video content
 - **Live Streaming**: Manage live channels and streaming sessions
-- **Library & File Upload**: Upload and manage files in BlendVision library
+- **Library & File Management**: Upload, update, download, and manage files in BlendVision library
+- **Clips & Auto-tagging**: Create and manage video clips with AI-powered auto-tagging
+- **Meeting**: Create and manage video meetings
 - **Chatroom**: Create and manage real-time chat experiences
 - **Account & Organization**: Access account information and organization details
 - **Playback**: Generate playback tokens and manage access codes
-- **Analytics**: Retrieve analytics and reporting data
+- **Analytics**: Retrieve analytics, CDN usage, and streaming metrics
 
 ### Available Tools
 
@@ -38,9 +40,29 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `cancel_live_channel` - Cancel and archive a live stream
 - `archive_live_channel` - Archive a live stream permanently
 
-#### Library & File Upload Tools
+#### Library & File Tools
 - `upload_file` - Initiate file upload and get presigned URLs
 - `complete_file_upload` - Complete file upload session after uploading parts
+- `cancel_file_upload` - Cancel an in-progress file upload session
+- `get_file` - Get file details by ID
+- `update_file` - Update file details (name, metadata, attributes)
+- `delete_file` - Delete a file from library
+- `download_file` - Get a download link for a file
+
+#### Clips & Auto-tagging Tools
+- `list_clips` - List video clips from a specific source
+- `get_clip` - Get clip details by ID
+- `create_clip` - Create a new video clip
+- `update_clip` - Update clip metadata
+- `delete_clip` - Delete a video clip
+- `get_auto_tagging` - Get auto-tagging results for a video source
+- `create_auto_tagging` - Create auto-tagging for a VOD video
+
+#### Meeting Tools
+- `create_meeting` - Create a new meeting with schedule configuration
+- `get_meeting` - Get meeting details by ID
+- `get_meeting_session_info` - Get meeting session info and participant tokens
+- `archive_meeting` - Archive a meeting
 
 #### Chatroom Tools
 - `list_chatrooms` - List all chatrooms
@@ -48,9 +70,10 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `create_chatroom` - Create a new chatroom
 - `send_chatroom_message` - Send a message to a chatroom
 
-#### Account Tools
+#### Account & Organization Tools
 - `get_account` - Get current account information
 - `list_organizations` - List accessible organizations
+- `list_hierarchical_sub_organizations` - List hierarchical sub-organizations
 
 #### Playback Tools
 - `generate_playback_token` - Generate tokens for content access
@@ -58,6 +81,10 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 
 #### Analytics Tools
 - `get_analytics` - Retrieve analytics reports
+- `get_cdn_usage_report` - Get CDN usage report for bandwidth and traffic
+- `query_default_usage_charts` - Query default usage charts with time range
+- `get_user_access_chart` - Get user access analytics chart
+- `query_usage_summary` - Query usage summary analytics
 
 ## Quick Start
 

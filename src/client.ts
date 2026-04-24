@@ -293,4 +293,26 @@ export class BlendVisionClient {
     const requestBody = { complete_data: completeData };
     return this.request('POST', `/bv/cms/v1/library/files/${fileId}:complete-upload`, requestBody, { orgId });
   }
+
+  async updateFile(fileId: string, data: any, orgId?: string) {
+    const requestBody = { file: data };
+    return this.request('PUT', `/bv/cms/v1/library/files/${fileId}`, requestBody, { orgId });
+  }
+
+  async cancelUploadFile(fileId: string, uploadId: string, orgId?: string) {
+    const requestBody = { upload_id: uploadId };
+    return this.request('POST', `/bv/cms/v1/library/files/${fileId}:cancel-upload`, requestBody, { orgId });
+  }
+
+  async getFile(fileId: string, orgId?: string) {
+    return this.request('GET', `/bv/cms/v1/library/files/${fileId}`, undefined, { orgId });
+  }
+
+  async deleteFile(fileId: string, orgId?: string) {
+    return this.request('DELETE', `/bv/cms/v1/library/files/${fileId}`, undefined, { orgId });
+  }
+
+  async downloadFile(fileId: string, orgId?: string) {
+    return this.request('POST', `/bv/cms/v1/library/files/${fileId}:download`, undefined, { orgId });
+  }
 }
