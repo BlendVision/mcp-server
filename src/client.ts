@@ -65,7 +65,10 @@ export class BlendVisionClient {
 
   // VOD API Methods
   async listVideos(params?: { page?: number; pageSize?: number; status?: string; orgId?: string }) {
-    const { orgId, ...queryParams } = params || {};
+    const { orgId, page, pageSize, ...rest } = params || {};
+    const queryParams: Record<string, any> = { ...rest };
+    if (page !== undefined) queryParams.current_page = page;
+    if (pageSize !== undefined) queryParams.items_per_page = pageSize;
     return this.request('GET', '/bv/cms/v1/vods', undefined, { params: queryParams, orgId });
   }
 
@@ -221,6 +224,27 @@ export class BlendVisionClient {
     business_org_ids?: string[];
   }, orgId?: string) {
     return this.request('POST', '/bv/analytics/v1/analytics/usage-summary:query', data, { orgId });
+  }
+
+  async queryAiskUsageSummary(data: {
+    start_time: string;
+    end_time: string;
+    bot_ids?: string[];
+    business_org_ids?: string[];
+  }, orgId?: string) {
+    return this.request('POST', '/bv/analytics/v1/analytics/aisk/usage-summary:query', data, { orgId });
+  }
+
+  async queryAiskUsageCharts(data: {
+    start_time: string;
+    end_time: string;
+    bot_ids?: string[];
+    breakdown_dimension?: string;
+    business_org_ids?: string[];
+    time_granularity?: string;
+    usage_type?: string;
+  }, orgId?: string) {
+    return this.request('POST', '/bv/analytics/v1/analytics/aisk/usage-charts:query', data, { orgId });
   }
 
   // Clips API Methods
