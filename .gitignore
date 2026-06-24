@@ -16,3 +16,6 @@ dist/
 
 # MCP configuration with credentials (keep example, ignore actual config)
 .mcp.json
+
+# Local Claude Code settings (may contain API tokens)
+.claude/settings.local.json

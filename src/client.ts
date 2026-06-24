@@ -190,13 +190,6 @@ export class BlendVisionClient {
     return this.request('GET', '/bv/analytics/v1/reports', undefined, { params, orgId });
   }
 
-  async getCdnUsageReport(params: {
-    time: string;
-    streaming_type: string;
-  }, orgId?: string) {
-    return this.request('GET', '/bv/analytics/v1/cdn/usage', undefined, { params, orgId });
-  }
-
   async queryDefaultUsageCharts(data: {
     start_time: string;
     end_time: string;
@@ -247,18 +240,21 @@ export class BlendVisionClient {
     return this.request('POST', '/bv/analytics/v1/analytics/aisk/usage-charts:query', data, { orgId });
   }
 
-  // Clips API Methods
-  async listClips(params: {
-    'source.id': string;
-    'source.type': string;
-    page?: number;
-    pageSize?: number;
-    orgId?: string;
-  }) {
-    const { orgId, ...queryParams } = params;
-    return this.request('GET', '/bv/cms/v1/clips', undefined, { params: queryParams, orgId });
+  async queryPerformanceBreakdownDimensionTimeCharts(data: {
+    start_time: string;
+    end_time: string;
+    time_granularity?: string;
+    analytics_streaming_type?: string;
+    business_org_ids?: string[];
+    devices?: string[];
+    countries?: string[];
+    performance_type?: string;
+    breakdown_dimension?: string;
+  }, orgId?: string) {
+    return this.request('POST', '/bv/analytics/v1/performance/breakdown-dimension-time-charts:query', data, { orgId });
   }
 
+  // Clips API Methods
   async getClip(clipId: string, orgId?: string) {
     return this.request('GET', `/bv/cms/v1/clips/${clipId}`, undefined, { orgId });
   }

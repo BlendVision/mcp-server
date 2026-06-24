@@ -34,31 +34,6 @@ export class AnalyticsTools extends BaseTool {
 
     registry.register(
       {
-        name: 'get_cdn_usage_report',
-        description: 'Get CDN usage report for bandwidth and traffic analysis',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            time: {
-              type: 'string',
-              description: 'Time in date-time format (e.g., 2024-01-01T00:00:00Z)',
-              format: 'date-time',
-            },
-            streamingType: {
-              type: 'string',
-              description: 'Streaming type for the report',
-              enum: ['CDN_REPORT_STREAMING_TYPE_LIVE', 'CDN_REPORT_STREAMING_TYPE_VOD', 'CDN_REPORT_STREAMING_TYPE_LIVE_TO_VOD'],
-            },
-            ...orgIdProperty,
-          },
-          required: ['time', 'streamingType'],
-        },
-      },
-      async (params) => instance.getCdnUsageReport(params)
-    );
-
-    registry.register(
-      {
         name: 'query_default_usage_charts',
         description: 'Query default usage charts with time range and filters',
         inputSchema: {
@@ -74,29 +49,46 @@ export class AnalyticsTools extends BaseTool {
               description: 'End time in ISO format (e.g., 2026-03-19T16:00:00.000Z)',
               format: 'date-time',
             },
-            analyticsStreamingType: {
-              type: 'string',
-              description: 'Analytics streaming type',
-              enum: ['STREAMING_TYPE_UNSPECIFIED', 'STREAMING_TYPE_LIVE', 'STREAMING_TYPE_VOD', 'STREAMING_TYPE_LIVE_TO_VOD'],
-            },
             businessOrgIds: {
               type: 'array',
               items: { type: 'string' },
-              description: 'List of business organization IDs',
+              description: 'List of business organization IDs (required)',
             },
             timeGranularity: {
               type: 'string',
-              description: 'Time granularity for the report',
-              enum: ['TIME_GRANULARITY_UNSPECIFIED', 'TIME_GRANULARITY_DAY', 'TIME_GRANULARITY_HOUR', 'TIME_GRANULARITY_MONTH'],
+              description: 'Time granularity for the report (required)',
+              enum: [
+                'TIME_GRANULARITY_UNSPECIFIED',
+                'TIME_GRANULARITY_HOUR',
+                'TIME_GRANULARITY_DAY',
+                'TIME_GRANULARITY_MONTH',
+                'TIME_GRANULARITY_YEAR',
+                'TIME_GRANULARITY_QUARTER',
+              ],
             },
             usageType: {
               type: 'string',
-              description: 'Usage type',
-              enum: ['USAGE_TYPE_UNSPECIFIED', 'USAGE_TYPE_CDN', 'USAGE_TYPE_TRANSCODING'],
+              description: 'Usage type (required)',
+              enum: [
+                'USAGE_TYPE_UNSPECIFIED',
+                'USAGE_TYPE_CDN',
+                'USAGE_TYPE_STORAGE',
+                'USAGE_TYPE_ENCODING',
+                'USAGE_TYPE_LIVE_DURATION',
+                'USAGE_TYPE_DRM',
+                'USAGE_TYPE_AUDIO_ENCODING_COUNT',
+                'USAGE_TYPE_PLAYER_LICENSE_COUNT',
+                'USAGE_TYPE_AI_TRANSLATION_COUNT',
+              ],
+            },
+            analyticsStreamingType: {
+              type: 'string',
+              description: 'Analytics streaming type',
+              enum: ['STREAMING_TYPE_UNSPECIFIED', 'STREAMING_TYPE_VOD', 'STREAMING_TYPE_LIVE', 'STREAMING_TYPE_LIVE_TO_VOD', 'STREAMING_TYPE_AUDIO'],
             },
             ...orgIdProperty,
           },
-          required: ['startTime', 'endTime'],
+          required: ['startTime', 'endTime', 'businessOrgIds', 'timeGranularity', 'usageType'],
         },
       },
       async (params) => instance.queryDefaultUsageCharts(params)
@@ -153,19 +145,19 @@ export class AnalyticsTools extends BaseTool {
               description: 'End time in ISO format (e.g., 2026-03-25T00:00:00.000Z)',
               format: 'date-time',
             },
-            analyticsStreamingType: {
-              type: 'string',
-              description: 'Analytics streaming type',
-              enum: ['STREAMING_TYPE_UNSPECIFIED', 'STREAMING_TYPE_LIVE', 'STREAMING_TYPE_VOD', 'STREAMING_TYPE_LIVE_TO_VOD'],
-            },
             businessOrgIds: {
               type: 'array',
               items: { type: 'string' },
-              description: 'List of business organization IDs',
+              description: 'List of business organization IDs (required)',
+            },
+            analyticsStreamingType: {
+              type: 'string',
+              description: 'Analytics streaming type',
+              enum: ['STREAMING_TYPE_UNSPECIFIED', 'STREAMING_TYPE_VOD', 'STREAMING_TYPE_LIVE', 'STREAMING_TYPE_LIVE_TO_VOD', 'STREAMING_TYPE_AUDIO'],
             },
             ...orgIdProperty,
           },
-          required: ['startTime', 'endTime'],
+          required: ['startTime', 'endTime', 'businessOrgIds'],
         },
       },
       async (params) => instance.queryUsageSummary(params)
@@ -276,25 +268,102 @@ export class AnalyticsTools extends BaseTool {
       },
       async (params) => instance.queryAiskUsageCharts(params)
     );
+
+    registry.register(
+      {
+        name: 'query_performance_breakdown_dimension_time_charts',
+        description: 'Query playback performance time charts broken down by a dimension (streaming type, device, or geography)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            startTime: {
+              type: 'string',
+              description: 'Start time in ISO format (e.g., 2026-05-27T16:00:00.000Z)',
+              format: 'date-time',
+            },
+            endTime: {
+              type: 'string',
+              description: 'End time in ISO format (e.g., 2026-06-24T16:00:00.000Z)',
+              format: 'date-time',
+            },
+            timeGranularity: {
+              type: 'string',
+              description: 'Time granularity for the report (required)',
+              enum: [
+                'TIME_GRANULARITY_UNSPECIFIED',
+                'TIME_GRANULARITY_HOUR',
+                'TIME_GRANULARITY_DAY',
+                'TIME_GRANULARITY_MONTH',
+                'TIME_GRANULARITY_YEAR',
+                'TIME_GRANULARITY_QUARTER',
+              ],
+            },
+            businessOrgIds: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'List of business organization IDs (required)',
+            },
+            performanceType: {
+              type: 'string',
+              description: 'Performance metric to chart (required)',
+              enum: [
+                'PERFORMANCE_TYPE_UNSPECIFIED',
+                'PERFORMANCE_TYPE_VIEWS',
+                'PERFORMANCE_TYPE_UNIQUE_VIEWERS',
+                'PERFORMANCE_TYPE_AVG_VIEWER_VIEWS',
+                'PERFORMANCE_TYPE_WATCH_TIME',
+                'PERFORMANCE_TYPE_AVG_WATCH_TIME',
+              ],
+            },
+            breakdownDimension: {
+              type: 'string',
+              description: 'Dimension to break the time chart down by (required)',
+              enum: [
+                'PERFORMANCE_TIME_CHART_BREAKDOWN_DIMENSION_UNSPECIFIED',
+                'PERFORMANCE_TIME_CHART_BREAKDOWN_DIMENSION_STREAMING_TYPE',
+                'PERFORMANCE_TIME_CHART_BREAKDOWN_DIMENSION_DEVICE',
+                'PERFORMANCE_TIME_CHART_BREAKDOWN_DIMENSION_GEOGRAPHY',
+              ],
+            },
+            analyticsStreamingType: {
+              type: 'string',
+              description: 'Analytics streaming type filter (optional)',
+              enum: ['STREAMING_TYPE_UNSPECIFIED', 'STREAMING_TYPE_VOD', 'STREAMING_TYPE_LIVE', 'STREAMING_TYPE_LIVE_TO_VOD', 'STREAMING_TYPE_AUDIO'],
+            },
+            devices: {
+              type: 'array',
+              description: 'Filter by user device types (optional)',
+              items: {
+                type: 'string',
+                enum: [
+                  'USER_DEVICE_TYPE_UNSPECIFIED',
+                  'USER_DEVICE_TYPE_DESKTOP',
+                  'USER_DEVICE_TYPE_MOBILE_IOS',
+                  'USER_DEVICE_TYPE_MOBILE_ANDROID',
+                  'USER_DEVICE_TYPE_TABLET_IOS',
+                  'USER_DEVICE_TYPE_TABLET_ANDROID',
+                  'USER_DEVICE_TYPE_OTHERS',
+                ],
+              },
+            },
+            countries: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Filter by country codes (optional)',
+            },
+            ...orgIdProperty,
+          },
+          required: ['startTime', 'endTime', 'timeGranularity', 'businessOrgIds', 'performanceType', 'breakdownDimension'],
+        },
+      },
+      async (params) => instance.queryPerformanceBreakdownDimensionTimeCharts(params)
+    );
   }
 
   async getAnalytics(params: any) {
     try {
       const { orgId, ...analyticsParams } = params;
       const result = await this.client.getAnalytics(analyticsParams, orgId);
-      return this.formatResponse(result);
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
-
-  async getCdnUsageReport(params: any) {
-    try {
-      const cdnParams = {
-        time: params.time,
-        streaming_type: params.streamingType,
-      };
-      const result = await this.client.getCdnUsageReport(cdnParams, params.orgId);
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError(error);
@@ -375,6 +444,26 @@ export class AnalyticsTools extends BaseTool {
         ...(params.usageType && { usage_type: params.usageType }),
       };
       const result = await this.client.queryAiskUsageCharts(data, params.orgId);
+      return this.formatResponse(result);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  async queryPerformanceBreakdownDimensionTimeCharts(params: any) {
+    try {
+      const data = {
+        start_time: params.startTime,
+        end_time: params.endTime,
+        ...(params.timeGranularity && { time_granularity: params.timeGranularity }),
+        ...(params.analyticsStreamingType && { analytics_streaming_type: params.analyticsStreamingType }),
+        ...(params.businessOrgIds && { business_org_ids: params.businessOrgIds }),
+        ...(params.devices && { devices: params.devices }),
+        ...(params.countries && { countries: params.countries }),
+        ...(params.performanceType && { performance_type: params.performanceType }),
+        ...(params.breakdownDimension && { breakdown_dimension: params.breakdownDimension }),
+      };
+      const result = await this.client.queryPerformanceBreakdownDimensionTimeCharts(data, params.orgId);
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError(error);

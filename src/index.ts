@@ -6,56 +6,17 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { BlendVisionClient } from './client.js';
-import type { BlendVisionConfig } from './types.js';
-
-// Import all tool modules
-import {
-  ToolRegistry,
-  VODTools,
-  LiveTools,
-  AnalyticsTools,
-  ChatroomTools,
-  AccountTools,
-  ClipsTools,
-  LibraryTools,
-  MeetingTools,
-} from './tools/index.js';
+import { buildRegistry, configFromEnv } from './registry.js';
 
 // Environment configuration
-const config: BlendVisionConfig = {
-  apiToken: process.env.BLENDVISION_API_TOKEN || '',
-  organizationId: process.env.BLENDVISION_ORG_ID,  // Optional - can be provided per-request
-  baseUrl: process.env.BLENDVISION_BASE_URL,
-};
+const config = configFromEnv();
 
 if (!config.apiToken) {
   throw new Error('BLENDVISION_API_TOKEN environment variable is required');
 }
 
-// Initialize client and registry
-const client = new BlendVisionClient(config);
-const registry = new ToolRegistry();
-
-// Initialize and register all tool modules
-const vodTools = new VODTools(client);
-const liveTools = new LiveTools(client);
-const analyticsTools = new AnalyticsTools(client);
-const chatroomTools = new ChatroomTools(client);
-const accountTools = new AccountTools(client);
-const clipsTools = new ClipsTools(client);
-const libraryTools = new LibraryTools(client);
-const meetingTools = new MeetingTools(client);
-
-// Register all tools
-VODTools.registerTools(registry, vodTools);
-LiveTools.registerTools(registry, liveTools);
-AnalyticsTools.registerTools(registry, analyticsTools);
-ChatroomTools.registerTools(registry, chatroomTools);
-AccountTools.registerTools(registry, accountTools);
-ClipsTools.registerTools(registry, clipsTools);
-LibraryTools.registerTools(registry, libraryTools);
-MeetingTools.registerTools(registry, meetingTools);
+// Initialize client and registry (shared with the CLI)
+const { registry } = buildRegistry(config);
 
 // Create MCP server
 const server = new Server(

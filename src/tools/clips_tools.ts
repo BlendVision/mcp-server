@@ -17,29 +17,6 @@ export class ClipsTools extends BaseTool {
     // Clips tools
     registry.register(
       {
-        name: 'list_clips',
-        description: 'List video clips from a specific source',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            sourceId: { type: 'string', description: 'The source ID (video or live)' },
-            sourceType: {
-              type: 'string',
-              description: 'Source type',
-              enum: ['CLIP_SOURCE_TYPE_VOD', 'CLIP_SOURCE_TYPE_LIVE'],
-            },
-            page: { type: 'number', description: 'Page number for pagination' },
-            pageSize: { type: 'number', description: 'Number of items per page' },
-            ...orgIdProperty,
-          },
-          required: ['sourceId', 'sourceType'],
-        },
-      },
-      async (params) => instance.listClips(params)
-    );
-
-    registry.register(
-      {
         name: 'get_clip',
         description: 'Get details of a specific clip by ID',
         inputSchema: {
@@ -112,7 +89,7 @@ export class ClipsTools extends BaseTool {
     registry.register(
       {
         name: 'get_auto_tagging',
-        description: 'Get auto-tagging results for a video source',
+        description: 'Get auto-tagging results for a video source. Use this to retrieve clips (取得 clips) for a VOD — auto-tagging returns the generated clip segments. This is the replacement for the removed list_clips tool.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -133,7 +110,7 @@ export class ClipsTools extends BaseTool {
     registry.register(
       {
         name: 'create_auto_tagging',
-        description: 'Create auto-tagging for a VOD video source. Auto-tagging analyzes video content to generate metadata tags.',
+        description: 'Create auto-tagging for a VOD video source. Auto-tagging analyzes video content to generate metadata tags. Use this to generate clips (產生 clips) for a VOD — it produces the clip segments that get_auto_tagging then retrieves.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -182,22 +159,6 @@ export class ClipsTools extends BaseTool {
       },
       async (params) => instance.createAutoTagging(params)
     );
-  }
-
-  async listClips(params: any) {
-    try {
-      const clipsParams = {
-        'source.id': params.sourceId,
-        'source.type': params.sourceType,
-        ...(params.page && { page: params.page }),
-        ...(params.pageSize && { pageSize: params.pageSize }),
-        ...(params.orgId && { orgId: params.orgId }),
-      };
-      const result = await this.client.listClips(clipsParams);
-      return this.formatResponse(result);
-    } catch (error) {
-      return this.handleError(error);
-    }
   }
 
   async getClip(params: any) {
