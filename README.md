@@ -209,6 +209,22 @@ Once connected to an MCP client like Claude, you can ask:
 - "Show me analytics for the last 7 days"
 - "Start the live stream on channel xyz789"
 
+## Running it as a shared server
+
+Beyond the stdio server each user runs locally, the same tools are served over
+HTTP by `build/connector.js`, which is what the Docker image runs. It is
+stateless and carries no credential — every request brings the caller's own API
+token in `Authorization: Bearer` — so it scales as plain replicas and needs no
+Secret:
+
+```bash
+cd deploy/k8s && kubectl apply -k .
+```
+
+See [deploy/k8s/README.md](deploy/k8s/README.md) for images, ingress and scaling.
+Plain Docker works the same way — `docker build -t blendvision-mcp . && docker run
+-p 3000:3000 blendvision-mcp` — and answers `GET /health`.
+
 ## API Reference
 
 This MCP server wraps the BlendVision One API. For detailed API documentation, visit:
