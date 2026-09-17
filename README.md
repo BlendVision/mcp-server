@@ -41,13 +41,41 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `archive_live_channel` - Archive a live stream permanently
 
 #### Library & File Tools
-- `upload_file` - Initiate file upload and get presigned URLs
+- `upload_file` - Upload a file (whole upload in one call), or just open a session and get presigned URLs
 - `complete_file_upload` - Complete file upload session after uploading parts
 - `cancel_file_upload` - Cancel an in-progress file upload session
 - `get_file` - Get file details by ID
 - `update_file` - Update file details (name, metadata, attributes)
 - `delete_file` - Delete a file from library
 - `download_file` - Get a download link for a file
+
+##### Uploading
+
+An upload is three steps: open a session, PUT the bytes straight to storage, then complete with
+each part's ETag. Pass `filePath` or `sourceUrl` and `upload_file` runs all three, which is the
+only form an agent can drive — it has no way to PUT binary itself:
+
+```jsonc
+// local file (stdio server / CLI)
+{ "filePath": "/Users/me/clips/demo.mp4" }
+
+// from a URL (also works on the remote connector; the URL must answer HEAD with Content-Length)
+{ "sourceUrl": "https://example.com/demo.mp4", "name": "demo.mp4" }
+```
+
+`type` is inferred from the extension (`.mp4`/`.m4v`/`.mxf` infer as video — pass
+`type: "FILE_TYPE_AUDIO"` if that is what you meant), and extension and size limits are checked
+before the first request. If a part fails, the session is cancelled rather than left dangling.
+The returned `file.id` is the library file id — what `create_video` takes as
+`source.library.video.id`.
+
+Passing neither `filePath` nor `sourceUrl` keeps the original behaviour: the session is opened and
+the presigned URLs come back, and you PUT the parts and call `complete_file_upload` yourself.
+
+Requirements: the API token's account needs a role with library write access (owner / admin /
+video admin), the organization needs one of the `BV_GENERAL`, `CONTENT` or `ORG_USER_PERSONAL`
+features, and `x-bv-org-id` must be set (via `BLENDVISION_ORG_ID` or the `orgId` parameter).
+`filePath` is rejected by the remote connector, which cannot read your filesystem.
 
 #### Clips & Auto-tagging Tools
 - `list_clips` - List video clips from a specific source

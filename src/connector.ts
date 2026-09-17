@@ -8,6 +8,7 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { BlendVisionClient } from './client.js';
+import { LibraryTools } from './tools/library_tools.js';
 import type { BlendVisionConfig } from './types.js';
 import express from 'express';
 
@@ -711,10 +712,21 @@ const tools: Tool[] = [
   // Library File Tools
   {
     name: 'upload_file',
-    description: 'Initiate a file upload to BlendVision library. Returns upload session data with presigned URLs for uploading file parts.',
+    description:
+      'Upload a file to the BlendVision library. Give sourceUrl (a URL the connector can fetch) ' +
+      'and the whole upload runs here: the session is opened, the bytes are PUT to the presigned ' +
+      'URL(s), and the upload is completed -- the returned file.id is what create_video takes as ' +
+      'source.library.video.id. Given no sourceUrl, it only opens the session and returns the ' +
+      'presigned URLs, and you must PUT the parts yourself and finish with complete_file_upload.',
     inputSchema: {
       type: 'object',
       properties: {
+        sourceUrl: {
+          type: 'string',
+          description:
+            'URL to stream the file from; must answer a HEAD request with Content-Length. ' +
+            'Runs the whole upload.'
+        },
         type: {
           type: 'string',
           enum: [
@@ -725,15 +737,15 @@ const tools: Tool[] = [
             'FILE_TYPE_WEB_LINK',
             'FILE_TYPE_AUDIO'
           ],
-          description: 'File type'
+          description: 'File type. Inferred from the extension when sourceUrl is used.'
         },
         name: {
           type: 'string',
-          description: 'Filename'
+          description: 'Filename. Defaults to the basename of sourceUrl.'
         },
         size: {
           type: 'number',
-          description: 'File size in bytes'
+          description: 'File size in bytes. Read from the source when sourceUrl is used.'
         },
         source: {
           type: 'string',
@@ -764,7 +776,9 @@ const tools: Tool[] = [
         },
         ...orgIdProperty,
       },
-      required: ['source'],
+      // `source` defaults to FILE_SOURCE_UPLOAD_IN_LIBRARY, so a one-shot
+      // upload needs nothing but sourceUrl.
+      required: [],
     },
   },
   {
@@ -1145,6 +1159,10 @@ const tools: Tool[] = [
 
 // Create a per-session MCP server with its own BlendVision client
 function createSessionServer(client: BlendVisionClient): Server {
+  // allowLocalFile: false -- the connector runs on a server, so it cannot read
+  // the caller's filesystem. Remote uploads go through sourceUrl.
+  const libraryTools = new LibraryTools(client, { allowLocalFile: false });
+
   const server = new Server(
     {
       name: 'blendvision-mcp-server',
@@ -1354,6 +1372,12 @@ function createSessionServer(client: BlendVisionClient): Server {
 
         // Library File operations
         case 'upload_file': {
+          if (params.sourceUrl) {
+            // LibraryTools runs the whole upload and returns an already-formatted
+            // MCP response, so it bypasses the ApiResponse formatting below.
+            return await libraryTools.uploadFile(params);
+          }
+
           const { orgId, ...fileData } = params;
           result = await client.uploadFile(fileData, orgId);
           break;
