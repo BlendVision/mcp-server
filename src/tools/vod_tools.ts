@@ -112,12 +112,14 @@ export class VODTools extends BaseTool {
             queue: {
               type: 'string',
               enum: ['QUEUE_STANDARD', 'QUEUE_PRIORITY'],
-              description: 'Encoding queue priority (required)',
+              description: 'Encoding queue priority. Defaults to QUEUE_STANDARD.',
               default: 'QUEUE_STANDARD'
             },
             security: {
               type: 'object',
-              description: 'Security settings (required)',
+              description:
+                'Security settings. Defaults to public playback with no watermark, ' +
+                'domain, geo or DRM restriction.',
               properties: {
                 privacy: {
                   type: 'object',
@@ -184,7 +186,7 @@ export class VODTools extends BaseTool {
             },
             schedule: {
               type: 'object',
-              description: 'Scheduling configuration (required)',
+              description: 'Scheduling configuration. Defaults to no schedule (available once ready).',
               properties: {
                 enable: { type: 'boolean', description: 'Enable scheduling' },
                 start_time: { type: 'string', description: 'Start time (ISO 8601)' },
@@ -193,11 +195,13 @@ export class VODTools extends BaseTool {
             },
             pte: {
               type: 'object',
-              description: 'Per-title encoding profile',
+              description: 'Per-title encoding. Omit to leave per-title encoding off.',
               properties: {
-                target_quality: { type: 'string' },
-                min_bitrate: { type: 'number' },
-                max_bitrate: { type: 'number' }
+                profile: {
+                  type: 'string',
+                  enum: ['PTE_PROFILE_HIGH'],
+                  description: 'Per-title encoding profile'
+                }
               }
             },
             metadata: {
@@ -252,7 +256,7 @@ export class VODTools extends BaseTool {
             },
             ...orgIdProperty,
           },
-          required: ['name', 'profile_set_id', 'source', 'queue', 'security', 'schedule'],
+          required: ['name', 'profile_set_id', 'source'],
         },
       },
       async (params) => instance.createVideo(params)
@@ -505,7 +509,20 @@ export class VODTools extends BaseTool {
   async createVideo(params: any) {
     try {
       const { orgId, ...createData } = params;
-      const result = await this.client.createVideo(createData, orgId);
+
+      // queue, security and schedule are required by the API but are pure
+      // boilerplate for a plain public VOD, so fill them in rather than making
+      // every caller (and every agent) reinvent them.
+      const result = await this.client.createVideo(
+        {
+          queue: 'QUEUE_STANDARD',
+          security: { privacy: { type: 'SECURITY_PRIVACY_TYPE_PUBLIC' } },
+          schedule: { enable: false },
+          ...createData,
+        },
+        orgId
+      );
+
       return this.formatResponse(result);
     } catch (error) {
       return this.handleError(error);

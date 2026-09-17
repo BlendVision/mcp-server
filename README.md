@@ -21,13 +21,17 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 #### VOD Tools
 - `list_videos` - List all videos with filtering options
 - `get_video` - Get video details by ID
-- `create_video` - Create a new video
+- `create_video` - Create a new video (needs a `profile_set_id` from `list_profile_sets`)
 - `update_video` - Update video metadata
 - `delete_video` - Delete a video
 - `update_vod_subtitles` - Update subtitles for a VOD video
 - `create_vod_download` - Trigger a VOD rendition download as MP4
 - `get_vod_download` - Get status of a VOD download job
 - `list_vod_downloads` - List all download jobs for a VOD
+
+#### Encoding Configuration Tools
+- `list_profile_sets` - List encoding profile sets (where a `profile_set_id` comes from)
+- `get_profile_set` - Get one profile set and its renditions
 
 #### Live Streaming Tools
 - `list_live_channels` - List all live channels
@@ -76,6 +80,27 @@ Requirements: the API token's account needs a role with library write access (ow
 video admin), the organization needs one of the `BV_GENERAL`, `CONTENT` or `ORG_USER_PERSONAL`
 features, and `x-bv-org-id` must be set (via `BLENDVISION_ORG_ID` or the `orgId` parameter).
 `filePath` is rejected by the remote connector, which cannot read your filesystem.
+
+##### From uploaded file to playable VOD
+
+An uploaded file sits in the library until it is encoded. Two more calls get it playable:
+
+```jsonc
+// 1. pick an encoding profile set (preset ones are BlendVision's built-ins)
+list_profile_sets { "preset": "PRESET_ONLY" }
+
+// 2. create the VOD from the library file
+create_video {
+  "name": "demo.mp4",
+  "profile_set_id": "<id from step 1>",
+  "source": { "type": "SOURCE_TYPE_LIBRARY", "library": { "video": { "id": "<file.id from upload_file>" } } }
+}
+```
+
+`queue`, `security` and `schedule` are required by the API but default here to the standard
+queue, public playback and no schedule, so a plain VOD needs nothing more than the three fields
+above. Anything you pass explicitly wins. Encoding is asynchronous — poll `get_video` until
+`status` reaches `VOD_STATUS_READY`.
 
 #### Clips & Auto-tagging Tools
 - `list_clips` - List video clips from a specific source

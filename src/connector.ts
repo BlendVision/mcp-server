@@ -9,9 +9,29 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { BlendVisionClient } from './client.js';
 import { LibraryTools } from './tools/library_tools.js';
+import { ConfigurationTools } from './tools/configuration_tools.js';
+import { VODTools } from './tools/vod_tools.js';
+import { ToolRegistry } from './tools/tool_registry.js';
 import type { BlendVisionConfig } from './types.js';
 import express from 'express';
 
+
+// Definitions for tools whose schema is large enough that keeping a second
+// hand-written copy here guarantees drift. No client is needed: only the
+// schemas are read off this registry, never the handlers.
+const schemaRegistry = new ToolRegistry();
+VODTools.registerTools(schemaRegistry, null as unknown as VODTools);
+ConfigurationTools.registerTools(schemaRegistry, null as unknown as ConfigurationTools);
+
+function toolSchema(name: string): Tool {
+  const tool = schemaRegistry.getTool(name);
+
+  if (!tool) {
+    throw new Error(`tool ${name} is missing from the registry`);
+  }
+
+  return tool;
+}
 
 // Common property for all tools to support dynamic org_id override
 const orgIdProperty = {
@@ -49,20 +69,7 @@ const tools: Tool[] = [
       required: ['videoId'],
     },
   },
-  {
-    name: 'create_video',
-    description: 'Create a new VOD video',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        title: { type: 'string', description: 'Video title' },
-        description: { type: 'string', description: 'Video description' },
-        resourceId: { type: 'string', description: 'Associated resource ID' },
-        ...orgIdProperty,
-      },
-      required: ['title'],
-    },
-  },
+  toolSchema('create_video'),
   {
     name: 'update_video',
     description: 'Update an existing VOD video',
@@ -709,6 +716,10 @@ const tools: Tool[] = [
     },
   },
 
+  // Configuration Tools
+  toolSchema('list_profile_sets'),
+  toolSchema('get_profile_set'),
+
   // Library File Tools
   {
     name: 'upload_file',
@@ -1162,6 +1173,8 @@ function createSessionServer(client: BlendVisionClient): Server {
   // allowLocalFile: false -- the connector runs on a server, so it cannot read
   // the caller's filesystem. Remote uploads go through sourceUrl.
   const libraryTools = new LibraryTools(client, { allowLocalFile: false });
+  const vodTools = new VODTools(client);
+  const configurationTools = new ConfigurationTools(client);
 
   const server = new Server(
     {
@@ -1194,11 +1207,10 @@ function createSessionServer(client: BlendVisionClient): Server {
         case 'get_video':
           result = await client.getVideo(params.videoId, params.orgId);
           break;
-        case 'create_video': {
-          const { orgId, ...createData } = params;
-          result = await client.createVideo(createData, orgId);
-          break;
-        }
+        case 'create_video':
+          // Through VODTools so queue/security/schedule get defaulted exactly
+          // as they are on the stdio server and the CLI.
+          return await vodTools.createVideo(params);
         case 'update_video': {
           const { videoId, orgId, ...updateData } = params;
           result = await client.updateVideo(videoId, updateData, orgId);
@@ -1369,6 +1381,12 @@ function createSessionServer(client: BlendVisionClient): Server {
         case 'delete_clip':
           result = await client.deleteClip(params.clipId, params.orgId);
           break;
+
+        // Configuration operations
+        case 'list_profile_sets':
+          return await configurationTools.listProfileSets(params);
+        case 'get_profile_set':
+          return await configurationTools.getProfileSet(params);
 
         // Library File operations
         case 'upload_file': {

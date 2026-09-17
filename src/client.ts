@@ -302,6 +302,15 @@ export class BlendVisionClient {
     return this.request('POST', `/bv/cms/v1/meetings/${meetingId}:archive`, {}, { orgId });
   }
 
+  // Configuration API Methods
+  async listProfileSets(params: Record<string, any>, orgId?: string) {
+    return this.request('GET', '/bv/configuration/v1/profile-sets', undefined, { params, orgId });
+  }
+
+  async getProfileSet(profileSetId: string, orgId?: string) {
+    return this.request('GET', `/bv/configuration/v1/profile-sets/${profileSetId}`, undefined, { orgId });
+  }
+
   // Library File API Methods
   async uploadFile(data: any, orgId?: string) {
     // Wrap the data in a 'file' object as required by the API
