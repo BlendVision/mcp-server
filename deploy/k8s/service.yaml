@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: blendvision-mcp-server
+  labels:
+    app.kubernetes.io/name: blendvision-mcp-server
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: blendvision-mcp-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

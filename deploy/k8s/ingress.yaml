@@ -1,0 +1,25 @@
+# Adjust ingressClassName, host and TLS to match your cluster, or drop this file
+# from kustomization.yaml and expose the Service however you normally do.
+#
+# The MCP endpoint also accepts the token as /mcp/<token> or ?token=<token>, and
+# both forms end up in ingress access logs. Prefer Authorization: Bearer, and
+# scrub the other two in your log configuration if clients still use them.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: blendvision-mcp-server
+  labels:
+    app.kubernetes.io/name: blendvision-mcp-server
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: mcp.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: blendvision-mcp-server
+                port:
+                  name: http
