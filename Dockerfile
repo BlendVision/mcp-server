@@ -25,6 +25,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY package.json ./
+# The API index the search_api/describe_api/call_api tools read. Resolved
+# relative to build/, so it has to travel with it.
+COPY data ./data
 
 # The `node` user ships with the image as uid 1000.
 USER node

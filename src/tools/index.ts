@@ -13,4 +13,5 @@ export { AccountTools } from './account_tools.js';
 export { ClipsTools } from './clips_tools.js';
 export { LibraryTools } from './library_tools.js';
 export { ConfigurationTools } from './configuration_tools.js';
+export { ApiTools } from './api_tools.js';
 export { MeetingTools } from './meeting_tools.js';

@@ -29,6 +29,52 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `get_vod_download` - Get status of a VOD download job
 - `list_vod_downloads` - List all download jobs for a VOD
 
+#### API Tools
+- `search_api` - Find endpoints by keyword (one line per match)
+- `describe_api` - Show one endpoint's parameters and schema
+- `call_api` - Call an endpoint directly
+
+##### Reaching endpoints that have no dedicated tool
+
+The REST API has a few hundred endpoints. A tool per endpoint would put the
+whole catalogue in `tools/list`, which is sent on every conversation — around
+36k tokens of tool definitions before any work happens. These three tools carry
+the long tail instead: a search costs ~200 tokens, and one endpoint's schema
+~2k, paid only when actually used.
+
+```jsonc
+search_api   { "query": "library upload" }
+describe_api { "path": "/bv/cms/v1/library/files:upload", "method": "POST" }
+call_api     { "method": "GET", "path": "/bv/cms/v1/vods/{id}", "pathParams": { "id": "abc123" } }
+```
+
+`call_api` validates the method and path against the index first, so a
+misremembered endpoint fails with a searchable message instead of an opaque 404.
+Response schemas are summarised to their field names unless you pass
+`includeResponses: true` — expanded, a single VOD endpoint runs to 60k
+characters.
+
+Prefer a dedicated tool where one exists. They encode work these cannot:
+`upload_file` drives a three-step upload and PUTs bytes to presigned URLs, which
+no generic call can express.
+
+##### Choosing which endpoints are reachable
+
+The server searches a compiled index, not the live API, and the repo ships one
+built from the public (`BV_EXTERNAL`) spec — 324 operations. Point
+`BLENDVISION_API_INDEX` at a different index to change what the server can
+reach:
+
+```bash
+npm run build:api-index -- path/to/spec.swagger.yaml -o /etc/bv/api-index.json
+BLENDVISION_API_INDEX=/etc/bv/api-index.json node build/connector.js
+```
+
+Because the endpoint list is data rather than code, a deployment can reach a
+wider surface than the published package describes — useful for APIs that are
+not part of the public contract. Note that this is only about discovery: what a
+token may actually call is decided by the API's own authorization, not here.
+
 #### Encoding Configuration Tools
 - `list_profile_sets` - List encoding profile sets (where a `profile_set_id` comes from)
 - `get_profile_set` - Get one profile set and its renditions
