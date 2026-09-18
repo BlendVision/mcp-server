@@ -10,6 +10,7 @@ import {
 import { BlendVisionClient } from './client.js';
 import { LibraryTools } from './tools/library_tools.js';
 import { ConfigurationTools } from './tools/configuration_tools.js';
+import { ApiTools } from './tools/api_tools.js';
 import { VODTools } from './tools/vod_tools.js';
 import { ToolRegistry } from './tools/tool_registry.js';
 import type { BlendVisionConfig } from './types.js';
@@ -22,6 +23,7 @@ import express from 'express';
 const schemaRegistry = new ToolRegistry();
 VODTools.registerTools(schemaRegistry, null as unknown as VODTools);
 ConfigurationTools.registerTools(schemaRegistry, null as unknown as ConfigurationTools);
+ApiTools.registerTools(schemaRegistry, null as unknown as ApiTools);
 
 function toolSchema(name: string): Tool {
   const tool = schemaRegistry.getTool(name);
@@ -720,6 +722,11 @@ const tools: Tool[] = [
   toolSchema('list_profile_sets'),
   toolSchema('get_profile_set'),
 
+  // API Tools -- stand in for the endpoints that have no dedicated tool
+  toolSchema('search_api'),
+  toolSchema('describe_api'),
+  toolSchema('call_api'),
+
   // Library File Tools
   {
     name: 'upload_file',
@@ -1175,6 +1182,7 @@ function createSessionServer(client: BlendVisionClient): Server {
   const libraryTools = new LibraryTools(client, { allowLocalFile: false });
   const vodTools = new VODTools(client);
   const configurationTools = new ConfigurationTools(client);
+  const apiTools = new ApiTools(client);
 
   const server = new Server(
     {
@@ -1381,6 +1389,14 @@ function createSessionServer(client: BlendVisionClient): Server {
         case 'delete_clip':
           result = await client.deleteClip(params.clipId, params.orgId);
           break;
+
+        // Generic API operations
+        case 'search_api':
+          return await apiTools.searchApi(params);
+        case 'describe_api':
+          return await apiTools.describeApi(params);
+        case 'call_api':
+          return await apiTools.callApi(params);
 
         // Configuration operations
         case 'list_profile_sets':

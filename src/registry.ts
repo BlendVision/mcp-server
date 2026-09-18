@@ -12,6 +12,7 @@ import {
   LibraryTools,
   MeetingTools,
   ConfigurationTools,
+  ApiTools,
 } from './tools/index.js';
 
 /**
@@ -36,6 +37,7 @@ export function buildRegistry(config: BlendVisionConfig): {
     [LibraryTools, new LibraryTools(client)],
     [MeetingTools, new MeetingTools(client)],
     [ConfigurationTools, new ConfigurationTools(client)],
+    [ApiTools, new ApiTools(client)],
   ] as const;
 
   for (const [Klass, instance] of modules) {
