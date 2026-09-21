@@ -89,6 +89,21 @@ BLENDVISION_API_INDEX=/etc/bv/api-index.json node build/connector.js
 OpenAPI generator drops it. Pass it whenever the index covers `/cxm/`, or the
 write guard falls back to judging by HTTP method.
 
+To check a deployment end to end — discovery, a real read, and that writes are
+refused — against a live environment:
+
+```bash
+BLENDVISION_API_TOKEN=... BLENDVISION_ORG_ID=... \
+BLENDVISION_BASE_URL=https://api.one-dev.blendvision.io \
+BLENDVISION_API_INDEX=/etc/bv/api-index.json \
+node scripts/smoke-test-cxm.mjs
+```
+
+It never writes: it asserts that mutating calls are refused, and refuses to run
+at all with `BLENDVISION_ALLOW_CXM_WRITES` set, since the flag would invalidate
+what it is checking. CXM checks are skipped, not failed, when the index has no
+CXM operations.
+
 Because the endpoint list is data rather than code, a deployment can reach a
 wider surface than the published package describes — useful for APIs that are
 not part of the public contract. Note that this is only about discovery: what a

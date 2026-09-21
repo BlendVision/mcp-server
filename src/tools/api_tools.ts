@@ -250,6 +250,9 @@ export class ApiTools extends BaseTool {
         return this.formatResponse({
           data: {
             query,
+            // Reported on the empty result too: without it a caller cannot tell
+            // "the index holds nothing" from "nothing matched this query".
+            searched: index.operations.length,
             matches: [],
             hint:
               `nothing matched in ${index.operations.length} indexed operations; ` +
