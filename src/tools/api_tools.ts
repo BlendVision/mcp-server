@@ -25,6 +25,21 @@ import { ToolRegistry } from './tool_registry.js';
 
 const METHODS = ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'];
 
+/**
+ * call_api refuses mutating calls under this prefix unless writes are enabled.
+ *
+ * Only CXM is guarded, deliberately. The One API (/bv/) is a published external
+ * contract whose own authorization is what callers already rely on, and
+ * guarding it here would break existing use. CXM is different on two counts:
+ * its operations are not part of that contract, and the platform cannot express
+ * "read-only" for it -- cxmPerms is a single undifferentiated group in the RBAC
+ * tables, and no read-only role is granted it at all, so a token that can read
+ * CXM is also allowed to attempt every CXM write. This is the layer where that
+ * distinction can actually be made.
+ */
+const GUARDED_PREFIX = '/cxm/';
+const ALLOW_WRITES_ENV = 'BLENDVISION_ALLOW_CXM_WRITES';
+
 // Dropped from queries: they match everywhere and rank nothing.
 const STOPWORDS = new Set(['a', 'an', 'the', 'of', 'for', 'to', 'in', 'on', 'by', 'and', 'or', 'my', 'me', 'all']);
 
@@ -48,6 +63,8 @@ const SYNONYMS: Record<string, string[]> = {
 interface Operation {
   method: string;
   path: string;
+  /** The auth_options action the RPC declares, when the index carries it. */
+  action?: string;
   operationId?: string;
   summary?: string;
   description?: string;
@@ -133,7 +150,8 @@ export class ApiTools extends BaseTool {
         name: 'call_api',
         description:
           'Call a BlendVision REST endpoint directly. The method and path must exist in the API index. ' +
-          'Path placeholders may be filled inline (/bv/cms/v1/vods/abc123) or passed as pathParams.',
+          'Path placeholders may be filled inline (/bv/cms/v1/vods/abc123) or passed as pathParams. ' +
+          'Endpoints under /cxm/ are read-only unless the server enables writes; /bv/ is unrestricted.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -344,6 +362,15 @@ export class ApiTools extends BaseTool {
         );
       }
 
+      if (path.startsWith(GUARDED_PREFIX) && isMutating(matches[0], method) && !writesAllowed()) {
+        const action = matches[0]?.action;
+        throw new Error(
+          `refusing to call ${method} ${path}: it ${action ? `is ${action} and ` : ''}` +
+            `changes data under ${GUARDED_PREFIX}, which is read-only unless ` +
+            `${ALLOW_WRITES_ENV} is set. Reads are unaffected, as is the whole /bv/ API.`
+        );
+      }
+
       const result = await this.client.request(method, path, params.body, {
         params: params.query,
         orgId: params.orgId,
@@ -365,6 +392,30 @@ export class ApiTools extends BaseTool {
  * are all spelled `lives` -- so "live channel start" would score zero while
  * `/bv/cms/v1/lives/{id}:start` sat right there.
  */
+function writesAllowed(): boolean {
+  const value = (process.env[ALLOW_WRITES_ENV] || '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
+/**
+ * Whether a call changes anything.
+ *
+ * Decided by the operation's declared action, not its HTTP method: 28 CXM
+ * operations are POST with ACTION_READ -- batch-get, report generation,
+ * aggregation -- and a method-based rule would refuse all of them while
+ * catching nothing extra.
+ *
+ * With no action recorded (an index built without --actions, or an operation
+ * that declares none) it falls back to the method, which errs toward refusing.
+ */
+function isMutating(op: Operation | undefined, method: string): boolean {
+  if (op?.action) {
+    return op.action !== 'ACTION_READ';
+  }
+
+  return method !== 'GET';
+}
+
 function scoreOperation(op: Operation, terms: string[]): { score: number; matched: number; unmatched: string[] } {
   const path = op.path.toLowerCase();
   const summary = (op.summary || '').toLowerCase();

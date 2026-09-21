@@ -50,6 +50,20 @@ call_api     { "method": "GET", "path": "/bv/cms/v1/vods/{id}", "pathParams": { 
 
 `call_api` validates the method and path against the index first, so a
 misremembered endpoint fails with a searchable message instead of an opaque 404.
+
+Endpoints under `/cxm/` are **read-only** unless the server sets
+`BLENDVISION_ALLOW_CXM_WRITES=1`; a mutating call is refused before any request
+is made. `/bv/` is deliberately unguarded — it is a published contract whose own
+authorization callers already rely on. CXM is guarded because the platform
+cannot express read-only for it: its RBAC permissions are one undifferentiated
+group, and no read-only role is granted them at all, so a token that can read
+CXM may also attempt every CXM write.
+
+Read and write are told apart by each operation's declared action, not by the
+HTTP method — 28 CXM operations are `POST` with `ACTION_READ` (batch-get, report
+generation, aggregation) and a method-based rule would refuse all of them. That
+requires an index built with `--actions`; without it, anything other than `GET`
+counts as mutating.
 Response schemas are summarised to their field names unless you pass
 `includeResponses: true` — expanded, a single VOD endpoint runs to 60k
 characters.
@@ -66,9 +80,14 @@ built from the public (`BV_EXTERNAL`) spec — 324 operations. Point
 reach:
 
 ```bash
-npm run build:api-index -- path/to/spec.swagger.yaml -o /etc/bv/api-index.json
+npm run build:api-index -- path/to/spec.swagger.yaml \
+  --actions path/to/proto-dir -o /etc/bv/api-index.json
 BLENDVISION_API_INDEX=/etc/bv/api-index.json node build/connector.js
 ```
+
+`--actions` reads each operation's declared action from the .proto sources; the
+OpenAPI generator drops it. Pass it whenever the index covers `/cxm/`, or the
+write guard falls back to judging by HTTP method.
 
 Because the endpoint list is data rather than code, a deployment can reach a
 wider surface than the published package describes — useful for APIs that are
