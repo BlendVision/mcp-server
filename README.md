@@ -29,6 +29,86 @@ Model Context Protocol (MCP) server for BlendVision One API. This server enables
 - `get_vod_download` - Get status of a VOD download job
 - `list_vod_downloads` - List all download jobs for a VOD
 
+#### API Tools
+- `search_api` - Find endpoints by keyword (one line per match)
+- `describe_api` - Show one endpoint's parameters and schema
+- `call_api` - Call an endpoint directly
+
+##### Reaching endpoints that have no dedicated tool
+
+The REST API has a few hundred endpoints. A tool per endpoint would put the
+whole catalogue in `tools/list`, which is sent on every conversation — around
+36k tokens of tool definitions before any work happens. These three tools carry
+the long tail instead: a search costs ~200 tokens, and one endpoint's schema
+~2k, paid only when actually used.
+
+```jsonc
+search_api   { "query": "library upload" }
+describe_api { "path": "/bv/cms/v1/library/files:upload", "method": "POST" }
+call_api     { "method": "GET", "path": "/bv/cms/v1/vods/{id}", "pathParams": { "id": "abc123" } }
+```
+
+`call_api` validates the method and path against the index first, so a
+misremembered endpoint fails with a searchable message instead of an opaque 404.
+
+Endpoints under `/cxm/` are **read-only** unless the server sets
+`BLENDVISION_ALLOW_CXM_WRITES=1`; a mutating call is refused before any request
+is made. `/bv/` is deliberately unguarded — it is a published contract whose own
+authorization callers already rely on. CXM is guarded because the platform
+cannot express read-only for it: its RBAC permissions are one undifferentiated
+group, and no read-only role is granted them at all, so a token that can read
+CXM may also attempt every CXM write.
+
+Read and write are told apart by each operation's declared action, not by the
+HTTP method — 28 CXM operations are `POST` with `ACTION_READ` (batch-get, report
+generation, aggregation) and a method-based rule would refuse all of them. That
+requires an index built with `--actions`; without it, anything other than `GET`
+counts as mutating.
+Response schemas are summarised to their field names unless you pass
+`includeResponses: true` — expanded, a single VOD endpoint runs to 60k
+characters.
+
+Prefer a dedicated tool where one exists. They encode work these cannot:
+`upload_file` drives a three-step upload and PUTs bytes to presigned URLs, which
+no generic call can express.
+
+##### Choosing which endpoints are reachable
+
+The server searches a compiled index, not the live API, and the repo ships one
+built from the public (`BV_EXTERNAL`) spec — 324 operations. Point
+`BLENDVISION_API_INDEX` at a different index to change what the server can
+reach:
+
+```bash
+npm run build:api-index -- path/to/spec.swagger.yaml \
+  --actions path/to/proto-dir -o /etc/bv/api-index.json
+BLENDVISION_API_INDEX=/etc/bv/api-index.json node build/connector.js
+```
+
+`--actions` reads each operation's declared action from the .proto sources; the
+OpenAPI generator drops it. Pass it whenever the index covers `/cxm/`, or the
+write guard falls back to judging by HTTP method.
+
+To check a deployment end to end — discovery, a real read, and that writes are
+refused — against a live environment:
+
+```bash
+BLENDVISION_API_TOKEN=... BLENDVISION_ORG_ID=... \
+BLENDVISION_BASE_URL=https://api.one-dev.blendvision.io \
+BLENDVISION_API_INDEX=/etc/bv/api-index.json \
+node scripts/smoke-test-cxm.mjs
+```
+
+It never writes: it asserts that mutating calls are refused, and refuses to run
+at all with `BLENDVISION_ALLOW_CXM_WRITES` set, since the flag would invalidate
+what it is checking. CXM checks are skipped, not failed, when the index has no
+CXM operations.
+
+Because the endpoint list is data rather than code, a deployment can reach a
+wider surface than the published package describes — useful for APIs that are
+not part of the public contract. Note that this is only about discovery: what a
+token may actually call is decided by the API's own authorization, not here.
+
 #### Encoding Configuration Tools
 - `list_profile_sets` - List encoding profile sets (where a `profile_set_id` comes from)
 - `get_profile_set` - Get one profile set and its renditions
