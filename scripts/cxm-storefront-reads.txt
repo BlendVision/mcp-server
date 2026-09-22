@@ -47,6 +47,13 @@ GET /cxm/storefront/v1alpha1/tasks/{id}:get-my-info
 GET /cxm/storefront/v1alpha1/analytics/my-activities/programs
 GET /cxm/storefront/v1alpha1/analytics/my-activities/program-summaries
 GET /cxm/storefront/v1alpha1/analytics/my-activities/content-summaries
+# "what have I watched/read recently" -- one listing per content type, which is
+# how the API splits them. Without these, a question about the asker's own
+# viewing history has nothing to read.
+GET /cxm/storefront/v1alpha1/analytics/my-activities/vods
+GET /cxm/storefront/v1alpha1/analytics/my-activities/aods
+GET /cxm/storefront/v1alpha1/analytics/my-activities/articles
+GET /cxm/storefront/v1alpha1/analytics/my-activities/files
 
 # --- Semantic search over the same content ---
 # The only way to answer "the newest courses" -- the programs listing has no

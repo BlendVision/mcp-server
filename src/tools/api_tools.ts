@@ -66,6 +66,15 @@ const SYNONYMS: Record<string, string[]> = {
   courses: ['programs'],
   assignment: ['task'],
   assignments: ['tasks'],
+  // A person's own viewing history lives under `my-activities`, and nothing in
+  // those paths says "watched". Without this bridge, "my recently watched
+  // videos" ranks the org-wide CMS listing (/bv/cms/v1/vods) above the asker's
+  // own record -- the wrong question answered with plausible data, which is
+  // worse than no match. `my` is a stopword and the path tokenizes on the
+  // hyphen, so `activities` is the token that can actually be hit.
+  watched: ['activities'],
+  viewed: ['activities'],
+  history: ['activities'],
 };
 
 interface Operation {
