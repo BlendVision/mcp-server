@@ -74,20 +74,39 @@ no generic call can express.
 
 ##### Choosing which endpoints are reachable
 
-The server searches a compiled index, not the live API, and the repo ships one
-built from the public (`BV_EXTERNAL`) spec — 324 operations. Point
-`BLENDVISION_API_INDEX` at a different index to change what the server can
-reach:
+The server searches a compiled index, not the live API, and the repo ships two:
+
+| Index                     | Built from                              | Operations            |
+| ------------------------- | --------------------------------------- | --------------------- |
+| `data/api-index.json`     | the public (`BV_EXTERNAL`) spec         | 324, reads and writes |
+| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 20, reads only        |
+
+Both load by default. The CXM one is a curated list because CXM is not part of
+the published contract — all 342 of its storefront operations are
+`BV_INTERNAL`, so the endpoints an agent may reach are named one by one in
+`scripts/cxm-storefront-reads.txt` (courses, content, spaces, assigned
+learning, and the asker's own learning record) rather than compiled wholesale.
+Every entry is `ACTION_READ`: a write is refused by the guard, but it also has
+no business being listed, because an indexed operation is one the agent will
+try.
+
+Set `BLENDVISION_API_INDEX` to a comma-separated list to replace both — with
+the `/bv` file alone to drop CXM entirely, or with your own slice:
 
 ```bash
 npm run build:api-index -- path/to/spec.swagger.yaml \
-  --actions path/to/proto-dir -o /etc/bv/api-index.json
+  --actions path/to/proto-dir \
+  --include @my-endpoints.txt \
+  -o /etc/bv/api-index.json
 BLENDVISION_API_INDEX=/etc/bv/api-index.json node build/connector.js
 ```
 
 `--actions` reads each operation's declared action from the .proto sources; the
 OpenAPI generator drops it. Pass it whenever the index covers `/cxm/`, or the
-write guard falls back to judging by HTTP method.
+write guard falls back to judging by HTTP method. `--include` takes a regex
+matched against `"METHOD path"`, or `@file` naming the operations one per line;
+`definitions` is pruned to what the kept operations reference, so a slice of a
+wide spec stays small (the CXM slice is 171KB of a 5MB spec).
 
 To check a deployment end to end — discovery, a real read, and that writes are
 refused — against a live environment:
@@ -95,7 +114,6 @@ refused — against a live environment:
 ```bash
 BLENDVISION_API_TOKEN=... BLENDVISION_ORG_ID=... \
 BLENDVISION_BASE_URL=https://api.one-dev.blendvision.io \
-BLENDVISION_API_INDEX=/etc/bv/api-index.json \
 node scripts/smoke-test-cxm.mjs
 ```
 

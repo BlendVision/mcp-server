@@ -16,8 +16,9 @@
  *   BLENDVISION_API_INDEX=/path/to/cxm-index.json \
  *   node scripts/smoke-test-cxm.mjs
  *
- * The bundled index carries no CXM operations, so BLENDVISION_API_INDEX is
- * required for the CXM checks; without it they are skipped, not failed.
+ * BLENDVISION_API_INDEX is optional: the bundled pair of indexes already covers
+ * the reviewed CXM reads. Set it to point at a different slice. If whatever is
+ * loaded has no CXM operations at all, the CXM checks are skipped, not failed.
  */
 
 import { BlendVisionClient } from '../build/client.js';
@@ -129,8 +130,14 @@ if (!hasCxm) {
     ['DELETE', '/cxm/storefront/v1alpha1/programs/00000000-0000-0000-0000-000000000000'],
   ]) {
     const attempt = read(await tools.callApi({ method, path }));
-    const refused = attempt.isError && errorMessage(attempt.data).includes('refusing to call');
-    record(refused, `${method} ${path.split('/').pop()} refused`, refused ? 'blocked before dispatch' : errorMessage(attempt.data));
+    const message = errorMessage(attempt.data);
+    // Two defences, and either one passing is the point: the curated CXM index
+    // lists reads only, so a write is usually rejected as absent from the index
+    // before the guard is reached. The guard is what holds if a later slice
+    // does include a mutating operation.
+    const refused =
+      attempt.isError && (message.includes('refusing to call') || message.includes('not in the API index'));
+    record(refused, `${method} ${path.split('/').pop()} refused`, refused ? message.slice(0, 60) : message);
   }
 }
 
