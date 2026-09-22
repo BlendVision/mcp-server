@@ -49,6 +49,10 @@ GET /cxm/storefront/v1alpha1/tasks
 GET /cxm/storefront/v1alpha1/tasks/{id}
 GET /cxm/storefront/v1alpha1/tasks:count-by-state
 GET /cxm/storefront/v1alpha1/tasks/{id}:get-my-info
+# The roster with a progress value per person. The task listing carries one
+# overall figure, so "how far is each assignee" had no answer without this and
+# was reported as something the platform does not keep.
+GET /cxm/storefront/v1alpha1/tasks/{task_id}/assignees
 
 # --- The asker's own learning record ---
 GET /cxm/storefront/v1alpha1/analytics/my-activities/programs
