@@ -1,0 +1,55 @@
+# The CXM storefront operations data/api-index-cxm.json exposes.
+#
+# CXM (BlendVision's learning product) is not part of the published /bv
+# contract: all 342 of its storefront operations are BV_INTERNAL. This file is
+# the reviewed subset an agent may reach -- reads only, and only the ones a
+# question about courses, content, spaces or assigned learning actually needs.
+#
+# Every entry must be ACTION_READ. `call_api` refuses a mutating /cxm/ call at
+# runtime regardless (BLENDVISION_ALLOW_CXM_WRITES gates that), but a write has
+# no business being listed here in the first place: an indexed operation is one
+# the agent can see and will try.
+#
+# Paths are matched exactly as "METHOD path", so the POST that creates a
+# program is not pulled in by the GET that lists them.
+#
+# Rebuild after editing:
+#   node scripts/build-api-index.mjs <internal-spec>.yaml \
+#     -o data/api-index-cxm.json \
+#     --actions <proto-dir>/bv \
+#     --include @scripts/cxm-storefront-reads.txt
+
+# --- Courses (programs) ---
+GET /cxm/storefront/v1alpha1/programs
+GET /cxm/storefront/v1alpha1/programs/{id}
+GET /cxm/storefront/v1alpha1/programs/{id}/overview
+GET /cxm/storefront/v1alpha1/programs/{id}/arrangement
+
+# --- Content ---
+GET /cxm/storefront/v1alpha1/contents
+POST /cxm/storefront/v1alpha1/contents:batch-get
+POST /cxm/storefront/v1alpha1/contents:aggregate
+GET /cxm/storefront/v1alpha1/licensed-contents
+
+# --- Spaces (where content is organised) ---
+GET /cxm/storefront/v1alpha1/spaces
+GET /cxm/storefront/v1alpha1/spaces/{id}
+GET /cxm/storefront/v1alpha1/spaces/{id}/contents
+GET /cxm/storefront/v1alpha1/explore/me/outlines
+
+# --- Assigned learning (tasks) ---
+GET /cxm/storefront/v1alpha1/tasks
+GET /cxm/storefront/v1alpha1/tasks/{id}
+GET /cxm/storefront/v1alpha1/tasks:count-by-state
+GET /cxm/storefront/v1alpha1/tasks/{id}:get-my-info
+
+# --- The asker's own learning record ---
+GET /cxm/storefront/v1alpha1/analytics/my-activities/programs
+GET /cxm/storefront/v1alpha1/analytics/my-activities/program-summaries
+GET /cxm/storefront/v1alpha1/analytics/my-activities/content-summaries
+
+# --- Semantic search over the same content ---
+# The only way to answer "the newest courses" -- the programs listing has no
+# sort parameter, while this takes sort=SEARCH_SORT_TYPE_UPDATED_AT_DESC and a
+# filter.types of [SEARCH_SOURCE_TYPE_PROGRAM].
+POST /cxm/storefront/v1alpha1/aisk/search

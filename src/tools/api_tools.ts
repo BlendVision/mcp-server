@@ -19,8 +19,10 @@ import { ToolRegistry } from './tool_registry.js';
  * and validated arguments. These are for the long tail.
  *
  * Which endpoints are reachable is decided by the compiled index, not by this
- * code: `data/api-index.json` ships built from the public (BV_EXTERNAL) spec,
- * and BLENDVISION_API_INDEX points at a different one.
+ * code. Two ship: `data/api-index.json`, built from the public (BV_EXTERNAL)
+ * spec, and `data/api-index-cxm.json`, a reviewed read-only slice of the
+ * internal CXM storefront spec. BLENDVISION_API_INDEX replaces both with a
+ * comma-separated list of your own.
  */
 
 const METHODS = ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'];
@@ -58,6 +60,12 @@ const SYNONYMS: Record<string, string[]> = {
   caption: ['subtitle'],
   thumbnail: ['cover', 'screenshot'],
   organisation: ['organization', 'org'],
+  // CXM calls a course a "program" and an assigned piece of learning a "task";
+  // both are what a person asking the question would call something else.
+  course: ['program'],
+  courses: ['programs'],
+  assignment: ['task'],
+  assignments: ['tasks'],
 };
 
 interface Operation {
@@ -195,25 +203,78 @@ export class ApiTools extends BaseTool {
     if (this.indexError) throw new Error(this.indexError);
 
     const fromEnv = process.env.BLENDVISION_API_INDEX;
-    const bundled = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'api-index.json');
-    const file = fromEnv || bundled;
+    const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'data');
+    // Two bundled indexes rather than one: the /bv index is compiled from the
+    // published external spec, the CXM one from a reviewed slice of the internal
+    // spec (scripts/cxm-storefront-reads.txt). Keeping them apart is what makes
+    // that slice reviewable -- and lets a deployment drop it by pointing
+    // BLENDVISION_API_INDEX at the /bv file alone.
+    const files = (fromEnv ? fromEnv.split(',') : [join(dataDir, 'api-index.json'), join(dataDir, 'api-index-cxm.json')])
+      .map((f) => f.trim())
+      .filter(Boolean);
 
     try {
-      const parsed = JSON.parse(readFileSync(file, 'utf8')) as ApiIndex;
+      const merged = this.mergeIndexes(files);
 
-      if (!Array.isArray(parsed.operations)) {
-        throw new Error('no operations array');
-      }
-
-      this.index = parsed;
-      return parsed;
+      this.index = merged;
+      return merged;
     } catch (error) {
       this.indexError =
-        `could not load the API index from ${file}` +
+        `could not load the API index from ${files.join(', ')}` +
         `${fromEnv ? ' (BLENDVISION_API_INDEX)' : ''}: ` +
         `${error instanceof Error ? error.message : String(error)}`;
       throw new Error(this.indexError);
     }
+  }
+
+  /**
+   * Read and concatenate index files. A bundled file that is absent is skipped
+   * -- a build that ships only the /bv index still works -- but a file named
+   * explicitly through BLENDVISION_API_INDEX must exist, or the deployment is
+   * silently narrower than whoever configured it believes.
+   */
+  private mergeIndexes(files: string[]): ApiIndex {
+    const explicit = !!process.env.BLENDVISION_API_INDEX;
+    const operations: Operation[] = [];
+    const definitions: Record<string, any> = {};
+    const titles: string[] = [];
+    let loaded = 0;
+
+    for (const file of files) {
+      let raw: string;
+
+      try {
+        raw = readFileSync(file, 'utf8');
+      } catch (error) {
+        if (!explicit && (error as { code?: string }).code === 'ENOENT') continue;
+        throw error;
+      }
+
+      const parsed = JSON.parse(raw) as ApiIndex;
+
+      if (!Array.isArray(parsed.operations)) {
+        throw new Error(`${file}: no operations array`);
+      }
+
+      loaded += 1;
+      operations.push(...parsed.operations);
+      // First definition of a name wins; the shared type names that appear in
+      // both specs are the same message either way.
+      for (const [name, schema] of Object.entries(parsed.definitions || {})) {
+        if (!(name in definitions)) definitions[name] = schema;
+      }
+      if (parsed.info?.title) titles.push(parsed.info.title);
+    }
+
+    if (!loaded) {
+      throw new Error('no index file could be read');
+    }
+
+    return {
+      info: { title: titles.join(' + '), operationCount: operations.length },
+      operations,
+      definitions,
+    };
   }
 
   async searchApi(params: any) {
