@@ -38,8 +38,21 @@ const METHODS = ['GET', 'PUT', 'POST', 'DELETE', 'PATCH'];
  * tables, and no read-only role is granted it at all, so a token that can read
  * CXM is also allowed to attempt every CXM write. This is the layer where that
  * distinction can actually be made.
+ *
+ * The permission is per operation, not a single on/off. "Let the agent create a
+ * course" and "let the agent delete every course" are different decisions --
+ * one is undoable by hand, the other is not -- and a boolean would collapse
+ * them into the same flag.
  */
 const GUARDED_PREFIX = '/cxm/';
+/**
+ * Which CXM writes are permitted, as a comma-separated list of "METHOD path"
+ * (`*` for all of them). A boolean would make "let the agent create a course"
+ * and "let the agent delete every course" the same decision, which they are
+ * not: the operations differ by whether anyone can undo them.
+ */
+const WRITE_ALLOWLIST_ENV = 'BLENDVISION_CXM_WRITES';
+/** The original boolean, still honoured as an alias for `*`. */
 const ALLOW_WRITES_ENV = 'BLENDVISION_ALLOW_CXM_WRITES';
 
 // Dropped from queries: they match everywhere and rank nothing.
@@ -66,6 +79,15 @@ const SYNONYMS: Record<string, string[]> = {
   courses: ['programs'],
   assignment: ['task'],
   assignments: ['tasks'],
+  // A person's own viewing history lives under `my-activities`, and nothing in
+  // those paths says "watched". Without this bridge, "my recently watched
+  // videos" ranks the org-wide CMS listing (/bv/cms/v1/vods) above the asker's
+  // own record -- the wrong question answered with plausible data, which is
+  // worse than no match. `my` is a stopword and the path tokenizes on the
+  // hyphen, so `activities` is the token that can actually be hit.
+  watched: ['activities'],
+  viewed: ['activities'],
+  history: ['activities'],
 };
 
 interface Operation {
@@ -426,12 +448,13 @@ export class ApiTools extends BaseTool {
         );
       }
 
-      if (path.startsWith(GUARDED_PREFIX) && isMutating(matches[0], method) && !writesAllowed()) {
+      if (path.startsWith(GUARDED_PREFIX) && isMutating(matches[0], method) && !writeIsAllowed(method, matches[0].path)) {
         const action = matches[0]?.action;
         throw new Error(
           `refusing to call ${method} ${path}: it ${action ? `is ${action} and ` : ''}` +
-            `changes data under ${GUARDED_PREFIX}, which is read-only unless ` +
-            `${ALLOW_WRITES_ENV} is set. Reads are unaffected, as is the whole /bv/ API.`
+            `changes data under ${GUARDED_PREFIX}. This deployment permits only the writes named in ` +
+            `${WRITE_ALLOWLIST_ENV}${process.env[WRITE_ALLOWLIST_ENV] ? ` (${process.env[WRITE_ALLOWLIST_ENV]})` : ' (unset — none)'}. ` +
+            'Reads are unaffected, as is the whole /bv/ API.'
         );
       }
 
@@ -456,9 +479,20 @@ export class ApiTools extends BaseTool {
  * are all spelled `lives` -- so "live channel start" would score zero while
  * `/bv/cms/v1/lives/{id}:start` sat right there.
  */
-function writesAllowed(): boolean {
-  const value = (process.env[ALLOW_WRITES_ENV] || '').trim().toLowerCase();
-  return value === '1' || value === 'true' || value === 'yes';
+function writeIsAllowed(method: string, path: string): boolean {
+  const legacy = (process.env[ALLOW_WRITES_ENV] || '').trim().toLowerCase();
+  if (legacy === '1' || legacy === 'true' || legacy === 'yes') return true;
+
+  const entries = (process.env[WRITE_ALLOWLIST_ENV] || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (entries.includes('*')) return true;
+
+  // Matched on the index's own path template, so the entry is written the way
+  // the index spells it -- `/programs/{id}`, not a filled-in id.
+  return entries.some((entry) => entry.toUpperCase() === `${method.toUpperCase()} ${path}`.toUpperCase());
 }
 
 /**

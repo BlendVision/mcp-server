@@ -79,16 +79,26 @@ The server searches a compiled index, not the live API, and the repo ships two:
 | Index                     | Built from                              | Operations            |
 | ------------------------- | --------------------------------------- | --------------------- |
 | `data/api-index.json`     | the public (`BV_EXTERNAL`) spec         | 324, reads and writes |
-| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 20, reads only        |
+| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 25, one of them a write |
 
 Both load by default. The CXM one is a curated list because CXM is not part of
 the published contract — all 342 of its storefront operations are
 `BV_INTERNAL`, so the endpoints an agent may reach are named one by one in
 `scripts/cxm-storefront-reads.txt` (courses, content, spaces, assigned
 learning, and the asker's own learning record) rather than compiled wholesale.
-Every entry is `ACTION_READ`: a write is refused by the guard, but it also has
-no business being listed, because an indexed operation is one the agent will
-try.
+
+One entry is a write — `POST …/programs`, so an agent can create a course —
+and being listed is not permission. `call_api` refuses a mutating `/cxm/` call
+unless that exact `"METHOD path"` appears in **`BLENDVISION_CXM_WRITES`** (a
+comma-separated list; `*` for all of them, and the older boolean
+`BLENDVISION_ALLOW_CXM_WRITES` still means `*`). A deployment that sets nothing
+is read-only even with the write indexed.
+
+Per operation rather than a single switch, because "let the agent create a
+course" and "let the agent delete every course" are different decisions — one
+is undoable by hand and the other is not. Note what stays out of the index
+entirely: `PUT`/`DELETE` on a program, permission updates, and every task and
+licensed-content write.
 
 Set `BLENDVISION_API_INDEX` to a comma-separated list to replace both — with
 the `/bv` file alone to drop CXM entirely, or with your own slice:

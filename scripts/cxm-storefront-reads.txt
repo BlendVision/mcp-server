@@ -5,10 +5,17 @@
 # the reviewed subset an agent may reach -- reads only, and only the ones a
 # question about courses, content, spaces or assigned learning actually needs.
 #
-# Every entry must be ACTION_READ. `call_api` refuses a mutating /cxm/ call at
-# runtime regardless (BLENDVISION_ALLOW_CXM_WRITES gates that), but a write has
-# no business being listed here in the first place: an indexed operation is one
-# the agent can see and will try.
+# Reads, plus exactly one write -- creating a program -- which is listed
+# because an agent that cannot see an operation cannot call it, and the AiSK
+# router's "build me a course from these videos" flow needs it. Being listed is
+# not permission: `call_api` still refuses a mutating /cxm/ call unless that
+# exact "METHOD path" appears in BLENDVISION_CXM_WRITES, so a deployment that
+# sets nothing is read-only even with the write indexed.
+#
+# Nothing else that mutates belongs here. Note what is deliberately absent:
+# PUT and DELETE on a program, permission updates, every task and
+# licensed-content write. Creating a course can be undone by deleting it;
+# changing or deleting someone else's cannot.
 #
 # Paths are matched exactly as "METHOD path", so the POST that creates a
 # program is not pulled in by the GET that lists them.
@@ -47,6 +54,20 @@ GET /cxm/storefront/v1alpha1/tasks/{id}:get-my-info
 GET /cxm/storefront/v1alpha1/analytics/my-activities/programs
 GET /cxm/storefront/v1alpha1/analytics/my-activities/program-summaries
 GET /cxm/storefront/v1alpha1/analytics/my-activities/content-summaries
+# "what have I watched/read recently" -- one listing per content type, which is
+# how the API splits them. Without these, a question about the asker's own
+# viewing history has nothing to read.
+GET /cxm/storefront/v1alpha1/analytics/my-activities/vods
+GET /cxm/storefront/v1alpha1/analytics/my-activities/aods
+GET /cxm/storefront/v1alpha1/analytics/my-activities/articles
+GET /cxm/storefront/v1alpha1/analytics/my-activities/files
+
+# --- The one write (see the note at the top) ---
+# Requires title, background, arrangement, permission, author_info, rating and
+# level_info. Four of those cannot be defaulted and have to be asked for:
+# the title, who may see it (permission.default_permission_role), the level,
+# and which contents go in with what sequence.
+POST /cxm/storefront/v1alpha1/programs
 
 # --- Semantic search over the same content ---
 # The only way to answer "the newest courses" -- the programs listing has no

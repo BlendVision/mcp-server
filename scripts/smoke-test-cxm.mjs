@@ -33,10 +33,12 @@ if (!token || !orgId) {
   process.exit(2);
 }
 
-if (process.env.BLENDVISION_ALLOW_CXM_WRITES) {
-  console.error('refusing to run with BLENDVISION_ALLOW_CXM_WRITES set: this script');
-  console.error('asserts that writes are refused, so the flag would invalidate it');
-  process.exit(2);
+for (const flag of ['BLENDVISION_ALLOW_CXM_WRITES', 'BLENDVISION_CXM_WRITES']) {
+  if (process.env[flag]) {
+    console.error(`refusing to run with ${flag} set: this script asserts that`);
+    console.error('writes are refused, so permitting any would invalidate it');
+    process.exit(2);
+  }
 }
 
 const tools = new ApiTools(new BlendVisionClient({ apiToken: token, organizationId: orgId, baseUrl }));
@@ -125,16 +127,19 @@ console.log('write guard');
 if (!hasCxm) {
   record(null, 'cxm writes refused', 'no cxm operations in this index');
 } else {
+  // The first is in the index and mutating, so it exercises the guard itself;
+  // the other two are not in the index at all, which is the earlier defence.
   for (const [method, path] of [
+    ['POST', '/cxm/storefront/v1alpha1/programs'],
     ['POST', '/cxm/storefront/v1alpha1/contents:batch-delete'],
     ['DELETE', '/cxm/storefront/v1alpha1/programs/00000000-0000-0000-0000-000000000000'],
   ]) {
-    const attempt = read(await tools.callApi({ method, path }));
+    const attempt = read(await tools.callApi({ method, path, body: {} }));
     const message = errorMessage(attempt.data);
-    // Two defences, and either one passing is the point: the curated CXM index
-    // lists reads only, so a write is usually rejected as absent from the index
-    // before the guard is reached. The guard is what holds if a later slice
-    // does include a mutating operation.
+    // Two defences, and either one is enough: an operation absent from the
+    // curated index is rejected before the guard is reached, and one that is
+    // present (POST /programs) is rejected by the guard because this
+    // deployment names no permitted writes.
     const refused =
       attempt.isError && (message.includes('refusing to call') || message.includes('not in the API index'));
     record(refused, `${method} ${path.split('/').pop()} refused`, refused ? message.slice(0, 60) : message);
