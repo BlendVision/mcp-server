@@ -94,6 +94,15 @@ GET /cxm/storefront/v1alpha1/analytics/my-activities/vods
 GET /cxm/storefront/v1alpha1/analytics/my-activities/aods
 GET /cxm/storefront/v1alpha1/analytics/my-activities/articles
 GET /cxm/storefront/v1alpha1/analytics/my-activities/files
+# "which courses am I part-way through" -- the only listing that answers it.
+# Returns exactly the contents whose progress is between 1% and 99%, newest
+# activity first; it is what the home page's Continue Watching row is built
+# from. Everything else makes the agent choose between a listing that reports
+# progress it never computed (ListPrograms writes 0 and NOT_STARTED into every
+# row) and paging thousands of rows of /contents to find the few that moved --
+# which is how one such question spent 260k tokens and then answered that the
+# organization had no progress at all, while the asker's own screen showed 14%.
+GET /cxm/storefront/v1alpha1/my-recently-viewed-contents
 
 # --- The one write (see the note at the top) ---
 # Requires title, background, arrangement, permission, author_info, rating and
