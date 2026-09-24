@@ -5,17 +5,33 @@
 # the reviewed subset an agent may reach -- reads only, and only the ones a
 # question about courses, content, spaces or assigned learning actually needs.
 #
-# Reads, plus exactly one write -- creating a program -- which is listed
+# Reads, plus two writes -- creating a program and creating a task -- listed
 # because an agent that cannot see an operation cannot call it, and the AiSK
-# router's "build me a course from these videos" flow needs it. Being listed is
-# not permission: `call_api` still refuses a mutating /cxm/ call unless that
-# exact "METHOD path" appears in BLENDVISION_CXM_WRITES, so a deployment that
-# sets nothing is read-only even with the write indexed.
+# router's "build me a course from these videos" and "assign it to Nick" flows
+# need them. Being listed is not permission: `call_api` still refuses a
+# mutating /cxm/ call unless that exact "METHOD path" appears in
+# BLENDVISION_CXM_WRITES, so a deployment that sets nothing is read-only even
+# with both writes indexed.
 #
-# Nothing else that mutates belongs here. Note what is deliberately absent:
-# PUT and DELETE on a program, permission updates, every task and
-# licensed-content write. Creating a course can be undone by deleting it;
-# changing or deleting someone else's cannot.
+# The two are not equally safe, and the difference is worth stating rather than
+# leaving for someone to discover. Creating a course can be undone by deleting
+# it and nobody hears about it in between. Creating a task calls
+# ScheduleNotificationsOnTaskCreated -- it mails the people it assigns -- so
+# deleting the task afterwards does not unsend anything. An agent that assigns
+# the wrong course to the wrong people has done something a person has to
+# apologise for.
+#
+# It is here because assigning is half of what the product is for, and the
+# earlier position -- index the create, refuse the assign -- left the agent able
+# to build a course and unable to give it to anyone, which is not a safer
+# product so much as an unfinished one. The per-deployment gate is where that
+# judgement belongs: a deployment can index both and permit only
+# `POST /cxm/storefront/v1alpha1/programs`, and several should.
+#
+# Nothing else that mutates belongs here. Still deliberately absent: PUT and
+# DELETE on a program, updating or deleting a task, permission updates, and
+# every licensed-content write. Changing or deleting something somebody else
+# made is a different question from making one.
 #
 # Paths are matched exactly as "METHOD path", so the POST that creates a
 # program is not pulled in by the GET that lists them.
@@ -78,6 +94,35 @@ GET /cxm/storefront/v1alpha1/analytics/my-activities/vods
 GET /cxm/storefront/v1alpha1/analytics/my-activities/aods
 GET /cxm/storefront/v1alpha1/analytics/my-activities/articles
 GET /cxm/storefront/v1alpha1/analytics/my-activities/files
+# "which courses am I part-way through" -- the only listing that answers it.
+# Returns exactly the contents whose progress is between 1% and 99%, newest
+# activity first; it is what the home page's Continue Watching row is built
+# from. Everything else makes the agent choose between a listing that reports
+# progress it never computed (ListPrograms writes 0 and NOT_STARTED into every
+# row) and paging thousands of rows of /contents to find the few that moved --
+# which is how one such question spent 260k tokens and then answered that the
+# organization had no progress at all, while the asker's own screen showed 14%.
+GET /cxm/storefront/v1alpha1/my-recently-viewed-contents
+# "which courses has anybody finished" -- counted from content_progress rows at
+# 100%, grouped by course, across the whole organization. It touches no task
+# table, so a course somebody finished on their own, unassigned and with no
+# certificate, is counted here like any other. Without it the only completion
+# figures reachable were the task rosters, and 「系統上完成的課程有哪些」 was
+# answered as "self-directed completions are not tracked", which is false.
+# Returns the TOP TEN by completion count and no more -- the limit is hardcoded
+# server-side, so an answer built on it has to say so.
+GET /cxm/storefront/v1alpha1/analytics/programs/top-completed
+# "who finished it" -- names, where the listing above gives counts. Finished
+# means progress at 100%, which is what the progress bar shows and what those
+# counts are counted from. Ships with orbit!7889.
+GET /cxm/storefront/v1alpha1/programs/{id}/completed-users
+# Certification is a SEPARATE record: it exists only where a certificate was
+# configured and is issued on its own criteria, so its holders are neither all
+# of nor only the people who finished. Indexed for questions about
+# certificates; answering "who completed this course" with it named three
+# people for one course and nobody for eight others whose completion counts
+# said otherwise.
+GET /cxm/storefront/v1alpha1/programs/{id}/cert-users
 
 # --- The one write (see the note at the top) ---
 # Requires title, background, arrangement, permission, author_info, rating and
@@ -85,6 +130,13 @@ GET /cxm/storefront/v1alpha1/analytics/my-activities/files
 # the title, who may see it (permission.default_permission_role), the level,
 # and which contents go in with what sequence.
 POST /cxm/storefront/v1alpha1/programs
+
+# --- The second write: assigning (see the note at the top) ---
+# Requires name, start_time, end_time, at least one content, and people --
+# `assignees`, an uploaded list, org units, or select-all. Sends mail to
+# everyone it assigns, which is why it is the one entry here that a deployment
+# should think about before naming it in BLENDVISION_CXM_WRITES.
+POST /cxm/storefront/v1alpha1/tasks
 
 # --- Semantic search over the same content ---
 # The only way to answer "the newest courses" -- the programs listing has no
