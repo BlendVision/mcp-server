@@ -103,6 +103,15 @@ GET /cxm/storefront/v1alpha1/analytics/my-activities/files
 # which is how one such question spent 260k tokens and then answered that the
 # organization had no progress at all, while the asker's own screen showed 14%.
 GET /cxm/storefront/v1alpha1/my-recently-viewed-contents
+# "which courses has anybody finished" -- counted from content_progress rows at
+# 100%, grouped by course, across the whole organization. It touches no task
+# table, so a course somebody finished on their own, unassigned and with no
+# certificate, is counted here like any other. Without it the only completion
+# figures reachable were the task rosters, and 「系統上完成的課程有哪些」 was
+# answered as "self-directed completions are not tracked", which is false.
+# Returns the TOP TEN by completion count and no more -- the limit is hardcoded
+# server-side, so an answer built on it has to say so.
+GET /cxm/storefront/v1alpha1/analytics/programs/top-completed
 
 # --- The one write (see the note at the top) ---
 # Requires title, background, arrangement, permission, author_info, rating and
