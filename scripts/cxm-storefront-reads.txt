@@ -54,6 +54,19 @@ GET /cxm/storefront/v1alpha1/tasks/{id}:get-my-info
 # was reported as something the platform does not keep.
 GET /cxm/storefront/v1alpha1/tasks/{task_id}/assignees
 
+# --- Who may see a course ---
+# CreateProgram takes `permission.default_permission_role` as a whole
+# PermissionRole -- id, name and access_role -- and orbit looks the role up BY
+# ID, failing the create with "permission role mismatch: expected 1, got 0"
+# when the id is empty. The id is a per-organisation row: only the organisation
+# knows which one ACCESS_ROLE_CXM_VIEWER is, so it has to be read.
+#
+# A read, and the one this index was missing to make the write it already
+# carries usable. Without it the AiSK agent had to scrape the row off an
+# existing course's permission, which only finds a role some course already
+# uses.
+GET /cxm/storefront/v1alpha1/permissions/roles
+
 # --- The asker's own learning record ---
 GET /cxm/storefront/v1alpha1/analytics/my-activities/programs
 GET /cxm/storefront/v1alpha1/analytics/my-activities/program-summaries

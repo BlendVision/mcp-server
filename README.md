@@ -79,7 +79,7 @@ The server searches a compiled index, not the live API, and the repo ships two:
 | Index                     | Built from                              | Operations            |
 | ------------------------- | --------------------------------------- | --------------------- |
 | `data/api-index.json`     | the public (`BV_EXTERNAL`) spec         | 324, reads and writes |
-| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 25, one of them a write |
+| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 27, one of them a write |
 
 Both load by default. The CXM one is a curated list because CXM is not part of
 the published contract — all 342 of its storefront operations are
