@@ -5,17 +5,33 @@
 # the reviewed subset an agent may reach -- reads only, and only the ones a
 # question about courses, content, spaces or assigned learning actually needs.
 #
-# Reads, plus exactly one write -- creating a program -- which is listed
+# Reads, plus two writes -- creating a program and creating a task -- listed
 # because an agent that cannot see an operation cannot call it, and the AiSK
-# router's "build me a course from these videos" flow needs it. Being listed is
-# not permission: `call_api` still refuses a mutating /cxm/ call unless that
-# exact "METHOD path" appears in BLENDVISION_CXM_WRITES, so a deployment that
-# sets nothing is read-only even with the write indexed.
+# router's "build me a course from these videos" and "assign it to Nick" flows
+# need them. Being listed is not permission: `call_api` still refuses a
+# mutating /cxm/ call unless that exact "METHOD path" appears in
+# BLENDVISION_CXM_WRITES, so a deployment that sets nothing is read-only even
+# with both writes indexed.
 #
-# Nothing else that mutates belongs here. Note what is deliberately absent:
-# PUT and DELETE on a program, permission updates, every task and
-# licensed-content write. Creating a course can be undone by deleting it;
-# changing or deleting someone else's cannot.
+# The two are not equally safe, and the difference is worth stating rather than
+# leaving for someone to discover. Creating a course can be undone by deleting
+# it and nobody hears about it in between. Creating a task calls
+# ScheduleNotificationsOnTaskCreated -- it mails the people it assigns -- so
+# deleting the task afterwards does not unsend anything. An agent that assigns
+# the wrong course to the wrong people has done something a person has to
+# apologise for.
+#
+# It is here because assigning is half of what the product is for, and the
+# earlier position -- index the create, refuse the assign -- left the agent able
+# to build a course and unable to give it to anyone, which is not a safer
+# product so much as an unfinished one. The per-deployment gate is where that
+# judgement belongs: a deployment can index both and permit only
+# `POST /cxm/storefront/v1alpha1/programs`, and several should.
+#
+# Nothing else that mutates belongs here. Still deliberately absent: PUT and
+# DELETE on a program, updating or deleting a task, permission updates, and
+# every licensed-content write. Changing or deleting something somebody else
+# made is a different question from making one.
 #
 # Paths are matched exactly as "METHOD path", so the POST that creates a
 # program is not pulled in by the GET that lists them.
@@ -85,6 +101,13 @@ GET /cxm/storefront/v1alpha1/analytics/my-activities/files
 # the title, who may see it (permission.default_permission_role), the level,
 # and which contents go in with what sequence.
 POST /cxm/storefront/v1alpha1/programs
+
+# --- The second write: assigning (see the note at the top) ---
+# Requires name, start_time, end_time, at least one content, and people --
+# `assignees`, an uploaded list, org units, or select-all. Sends mail to
+# everyone it assigns, which is why it is the one entry here that a deployment
+# should think about before naming it in BLENDVISION_CXM_WRITES.
+POST /cxm/storefront/v1alpha1/tasks
 
 # --- Semantic search over the same content ---
 # The only way to answer "the newest courses" -- the programs listing has no
