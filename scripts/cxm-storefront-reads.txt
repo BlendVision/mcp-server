@@ -112,11 +112,16 @@ GET /cxm/storefront/v1alpha1/my-recently-viewed-contents
 # Returns the TOP TEN by completion count and no more -- the limit is hardcoded
 # server-side, so an answer built on it has to say so.
 GET /cxm/storefront/v1alpha1/analytics/programs/top-completed
-# "who finished it" -- names, where the listing above gives counts. Reads
-# account_cert, so it is whoever was ISSUED A CERTIFICATE for that course and
-# is empty for a course with no certificate configured. It is therefore NOT
-# everybody who reached 100%; no endpoint lists that, and the gap is worth
-# saying out loud rather than filling from the nearest listing.
+# "who finished it" -- names, where the listing above gives counts. Finished
+# means progress at 100%, which is what the progress bar shows and what those
+# counts are counted from. Ships with orbit!7889.
+GET /cxm/storefront/v1alpha1/programs/{id}/completed-users
+# Certification is a SEPARATE record: it exists only where a certificate was
+# configured and is issued on its own criteria, so its holders are neither all
+# of nor only the people who finished. Indexed for questions about
+# certificates; answering "who completed this course" with it named three
+# people for one course and nobody for eight others whose completion counts
+# said otherwise.
 GET /cxm/storefront/v1alpha1/programs/{id}/cert-users
 
 # --- The one write (see the note at the top) ---
