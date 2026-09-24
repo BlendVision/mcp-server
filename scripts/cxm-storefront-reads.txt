@@ -112,6 +112,12 @@ GET /cxm/storefront/v1alpha1/my-recently-viewed-contents
 # Returns the TOP TEN by completion count and no more -- the limit is hardcoded
 # server-side, so an answer built on it has to say so.
 GET /cxm/storefront/v1alpha1/analytics/programs/top-completed
+# "who finished it" -- names, where the listing above gives counts. Reads
+# account_cert, so it is whoever was ISSUED A CERTIFICATE for that course and
+# is empty for a course with no certificate configured. It is therefore NOT
+# everybody who reached 100%; no endpoint lists that, and the gap is worth
+# saying out loud rather than filling from the nearest listing.
+GET /cxm/storefront/v1alpha1/programs/{id}/cert-users
 
 # --- The one write (see the note at the top) ---
 # Requires title, background, arrangement, permission, author_info, rating and
