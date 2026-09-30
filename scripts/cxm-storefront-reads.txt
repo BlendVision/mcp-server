@@ -43,6 +43,10 @@
 #     --include @scripts/cxm-storefront-reads.txt
 
 # --- Courses (programs) ---
+# filter.author_name_keyword answers 「某講師的課程有哪些」 exactly (orbit!7889).
+# The author is free text on the program row -- there is no instructor entity --
+# so without it the question can only go to aisk/search, which matches
+# semantically and returns courses that merely mention the name.
 GET /cxm/storefront/v1alpha1/programs
 GET /cxm/storefront/v1alpha1/programs/{id}
 GET /cxm/storefront/v1alpha1/programs/{id}/overview
