@@ -79,16 +79,19 @@ The server searches a compiled index, not the live API, and the repo ships two:
 | Index                     | Built from                              | Operations            |
 | ------------------------- | --------------------------------------- | --------------------- |
 | `data/api-index.json`     | the public (`BV_EXTERNAL`) spec         | 324, reads and writes |
-| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 28, two of them writes |
+| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 34, two of them writes |
 
 Both load by default. The CXM one is a curated list because CXM is not part of
 the published contract — all 342 of its storefront operations are
 `BV_INTERNAL`, so the endpoints an agent may reach are named one by one in
 `scripts/cxm-storefront-reads.txt` (courses, content, spaces, assigned
 learning, and the asker's own learning record) rather than compiled wholesale.
+One entry is not CXM's at all: the org-unit listing, which is `BV_INTERNAL` too
+and so in neither index by default, and without which a task can only be
+assigned by naming every person in a department one by one.
 
-One entry is a write — `POST …/programs`, so an agent can create a course —
-and being listed is not permission. `call_api` refuses a mutating `/cxm/` call
+Two entries are writes — `POST …/programs` and `POST …/tasks`, so an agent can
+create a course and assign it — and being listed is not permission. `call_api` refuses a mutating `/cxm/` call
 unless that exact `"METHOD path"` appears in **`BLENDVISION_CXM_WRITES`** (a
 comma-separated list; `*` for all of them, and the older boolean
 `BLENDVISION_ALLOW_CXM_WRITES` still means `*`). A deployment that sets nothing

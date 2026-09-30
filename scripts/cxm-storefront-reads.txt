@@ -1,4 +1,6 @@
-# The CXM storefront operations data/api-index-cxm.json exposes.
+# The operations data/api-index-cxm.json exposes: the CXM storefront subset, plus
+# the org-unit listing, which is not CXM's but is what makes assigning to a
+# department possible without carrying its roster through the agent.
 #
 # CXM (BlendVision's learning product) is not part of the published /bv
 # contract: all 342 of its storefront operations are BV_INTERNAL. This file is
@@ -141,6 +143,37 @@ POST /cxm/storefront/v1alpha1/programs
 # everyone it assigns, which is why it is the one entry here that a deployment
 # should think about before naming it in BLENDVISION_CXM_WRITES.
 POST /cxm/storefront/v1alpha1/tasks
+
+# --- Assigning to a unit instead of to everyone in it ---
+# CreateTask takes `assignee_org_units` -- one uuid per unit, expanded by the
+# backend into every person it contains, unit heads and MATRIX members included.
+# Without these two, "assign this to the marketing department" has to become a
+# hundred `assignees` entries, which the agent cannot do: a roster of a hundred
+# is 33,495 characters against its 30,000 result budget, and writing them back
+# out is 4,456 output tokens against a 2,048 cap. It reads eighty people,
+# believes it read all of them, and emits half a JSON array.
+#
+# One id instead. Both are BV_INTERNAL, so neither is in the public index, and
+# `assignee_org_units` is unusable without the listing that turns 「行銷部」 into
+# a uuid.
+#
+# ListOrgUnits is flat and carries each unit's `ancestors`, so two departments
+# with the same name under different parents can be told apart -- which matters
+# here more than anywhere: picking the wrong one assigns work to the wrong
+# hundred people. With `keyword` set the scope is the whole organization and
+# `parent_id` is ignored.
+GET /bv/org/v1/organizations/org-units
+
+# Answers "how many people would these units assign?" BEFORE the task is saved,
+# and the org chart cannot answer it: its two head-count fields both exclude
+# MATRIX assignments and neither counts unit heads, while assignment includes
+# both. Nor can the caller add the per-unit numbers up -- picking a parent and
+# its child, or two units sharing a matrix member, would count somebody twice.
+# So the card can say how many people a confirmation would actually reach.
+#
+# A POST that reads: it declares ACTION_READ, and call_api decides by the
+# declared action rather than by the method, so it is not gated as a write.
+POST /cxm/storefront/v1alpha1/tasks/assignees:previewOrgUnits
 
 # --- Semantic search over the same content ---
 # The only way to answer "the newest courses" -- the programs listing has no
