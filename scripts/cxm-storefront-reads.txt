@@ -109,6 +109,28 @@ GET /cxm/storefront/v1alpha1/analytics/my-activities/files
 # which is how one such question spent 260k tokens and then answered that the
 # organization had no progress at all, while the asker's own screen showed 14%.
 GET /cxm/storefront/v1alpha1/my-recently-viewed-contents
+# 「最新課程有哪些」 -- and the ONLY listing that answers it. It is the endpoint
+# the product's own pinned "最新課程" home line is built from (#582), so the
+# ordering an answer gives matches the one the asker can see on their screen:
+# available_since DESC, ties on the same calendar day by title ASC.
+#
+# It is here because the obvious alternative is wrong in a way nobody notices.
+# ListPrograms is the CPM management listing: its filter is
+# `exclude_permission_roles` and NOTHING else -- no visibility, no publish
+# window -- so it returns drafts and in-review courses beside published ones,
+# and sorting its rows by `updated_at` answers "recently edited", which puts a
+# three-year-old course that got a typo fix today at the top. Asked
+# 「最新課程有哪些」 that is exactly what came back.
+#
+# available_since is two-track and is NOT in the response: publish date for
+# category-licensed contents, FIRST license start for single-content licenses
+# (renewals never re-qualify a course). So the order has to be taken as given --
+# it cannot be recomputed from what comes back.
+#
+# Phase 1 serves LICENSED (marketplace) content only; asking for SELF_CREATED
+# is an explicit error rather than a quietly narrower answer, so an answer built
+# on this has to say that self-produced courses are not in it.
+GET /cxm/storefront/v1alpha1/my-latest-contents
 # "which courses has anybody finished" -- counted from content_progress rows at
 # 100%, grouped by course, across the whole organization. It touches no task
 # table, so a course somebody finished on their own, unassigned and with no
