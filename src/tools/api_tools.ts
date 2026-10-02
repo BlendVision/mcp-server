@@ -463,12 +463,54 @@ export class ApiTools extends BaseTool {
         orgId: params.orgId,
       });
 
-      return this.formatResponse(result);
+      // A query key the operation does not declare is accepted by the gateway
+      // and then ignored, which is the worst way for a request to be wrong: a
+      // 200, a plausible body, and none of the thing that was asked for.
+      //
+      // Observed: `sort=-published_on` on GET /contents, which has no `sort`
+      // parameter at all. The rows came back in their own order, the caller
+      // concluded the paging was broken, and spent five more requests proving
+      // it to itself.
+      //
+      // A NOTE rather than a refusal. The index is generated from the spec and
+      // the spec is not always complete -- GET /programs does not declare
+      // `page.*` and takes it anyway -- so refusing would break working calls
+      // to buy a warning. Saying so costs nothing and is checkable.
+      const ignored = undeclaredQueryKeys(matches[0], params.query);
+
+      return this.formatResponse(result, ignored.length
+        ? `NOTE: ${ignored.join(', ')} ${ignored.length === 1 ? 'is not a parameter' : 'are not parameters'} of ` +
+          `${method} ${matches[0].path}, so it was ignored rather than applied -- the result is NOT ` +
+          `sorted, filtered or paged by it. Accepted here: ${declaredQueryKeys(matches[0]).join(', ') || '(none)'}.`
+        : undefined);
     } catch (error) {
       return this.handleError(error);
     }
   }
 }
+
+/** The query parameters an indexed operation declares. */
+const declaredQueryKeys = (op: any): string[] =>
+  ((op?.parameters ?? []) as { name?: string; in?: string }[])
+    .filter((p) => p?.in === 'query' && typeof p.name === 'string')
+    .map((p) => p.name as string);
+
+/**
+ * Query keys the caller sent that the operation never declared.
+ *
+ * Empty when the operation declares no query parameters at all: that is an
+ * index without the detail rather than an endpoint that takes nothing, and
+ * guessing the second would accuse every correct call.
+ */
+const undeclaredQueryKeys = (op: any, query: unknown): string[] => {
+  const declared = declaredQueryKeys(op);
+
+  if (!declared.length || !query || typeof query !== 'object') return [];
+
+  const allowed = new Set(declared);
+
+  return Object.keys(query as Record<string, unknown>).filter((key) => !allowed.has(key));
+};
 
 /**
  * Scores an operation against the query terms.

@@ -71,7 +71,7 @@ export abstract class BaseTool {
   /**
    * Handle API response and format errors
    */
-  protected formatResponse<T>(result: { data?: T; error?: any }) {
+  protected formatResponse<T>(result: { data?: T; error?: any }, note?: string) {
     if (result.error) {
       return {
         content: [
@@ -92,6 +92,10 @@ export abstract class BaseTool {
           type: 'text' as const,
           text: JSON.stringify(result.data, null, 2),
         },
+        // A SECOND block, never appended to the first: the body is parsed as
+        // JSON by callers, and a note inside it would make every one of them
+        // fail on a request that otherwise worked.
+        ...(note ? [{ type: 'text' as const, text: note }] : []),
       ],
     };
   }
