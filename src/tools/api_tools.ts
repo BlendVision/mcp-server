@@ -687,6 +687,23 @@ function summarizeResponses(
   const out: Record<string, any> = {};
 
   for (const [code, response] of Object.entries(responses)) {
+    // Success only. The error responses carry the same generated paragraph on
+    // every operation in the spec -- "The `code` is `3` means got an invalid
+    // argument. There are more HTTP status code mappings listed on [here](...)"
+    // -- which is 90% of this field and tells the caller nothing about THIS
+    // endpoint. Measured on GET /cxm/storefront/v1alpha1/tasks: 1,485
+    // characters of responses, of which 143 were the 200. Across the index,
+    // 31,220 characters to 1,750.
+    //
+    // The cost is not the one call either. A describe_api result goes into the
+    // conversation and is re-read on every turn after it, so a paragraph that
+    // is identical for all 35 operations gets paid for once per turn for the
+    // rest of the question. What an error actually means arrives with the
+    // error, from call_api, about the request that caused it.
+    //
+    // `includeResponses: true` still returns everything, errors included.
+    if (!code.startsWith('2')) continue;
+
     const schema = resolveRefs(response.schema, definitions, [], 4);
     const properties = schema?.properties ? Object.keys(schema.properties) : undefined;
 
