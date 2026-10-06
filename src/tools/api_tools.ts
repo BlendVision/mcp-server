@@ -458,8 +458,10 @@ export class ApiTools extends BaseTool {
         );
       }
 
+      const { query, renamed } = respellQuery(matches[0], params.query);
+
       const result = await this.client.request(method, path, params.body, {
-        params: params.query,
+        params: query,
         orgId: params.orgId,
       });
 
@@ -476,18 +478,83 @@ export class ApiTools extends BaseTool {
       // the spec is not always complete -- GET /programs does not declare
       // `page.*` and takes it anyway -- so refusing would break working calls
       // to buy a warning. Saying so costs nothing and is checkable.
-      const ignored = undeclaredQueryKeys(matches[0], params.query);
+      const ignored = undeclaredQueryKeys(matches[0], query);
 
-      return this.formatResponse(result, ignored.length
-        ? `NOTE: ${ignored.join(', ')} ${ignored.length === 1 ? 'is not a parameter' : 'are not parameters'} of ` +
-          `${method} ${matches[0].path}, so it was ignored rather than applied -- the result is NOT ` +
-          `sorted, filtered or paged by it. Accepted here: ${declaredQueryKeys(matches[0]).join(', ') || '(none)'}.`
-        : undefined);
+      const notes = [
+        renamed.length &&
+          `NOTE: sent ${renamed.map(([from, to]) => `${from} as ${to}`).join(', ')} -- the spelling ` +
+            `${method} ${matches[0].path} takes. Use that spelling on this endpoint.`,
+        ignored.length &&
+          `NOTE: ${ignored.join(', ')} ${ignored.length === 1 ? 'is not a parameter' : 'are not parameters'} of ` +
+            `${method} ${matches[0].path}, so it was ignored rather than applied -- the result is NOT ` +
+            `sorted, filtered or paged by it. Accepted here: ${declaredQueryKeys(matches[0]).join(', ') || '(none)'}.`,
+      ].filter(Boolean);
+
+      return this.formatResponse(result, notes.length ? notes.join(' ') : undefined);
     } catch (error) {
       return this.handleError(error);
     }
   }
 }
+
+/**
+ * Query keys sent in the wrong one of this API's two spellings, put right.
+ *
+ * Paging is spelt two ways across these endpoints and nothing tells the caller
+ * which one it is talking to: /tasks, /programs and /assignees take flat
+ * `current_page` and `items_per_page`; my-activities, /licensed-contents and
+ * the completion rosters take `page.current_page` and `page.items_per_page`;
+ * /my-latest-contents takes `page.page_size`. The wrong spelling is not
+ * refused -- it is dropped, and the endpoint pages by its default.
+ *
+ * Measured: asked 「平台上進行中的任務有哪些」 the agent sent
+ * `page.items_per_page: 4` to /tasks, got the default ten rows back, and paid
+ * for six it had asked not to receive -- about ten percent of the question.
+ * The ignored-parameter NOTE was there, and on most runs the model did not
+ * act on it.
+ *
+ * So a key that is not declared is renamed when, and only when, the operation
+ * declares exactly one key with the same final segment: `page.items_per_page`
+ * becomes `items_per_page` where that is what is declared, and the other way
+ * round. Never TO an undeclared name, never when the right spelling was sent
+ * as well, and never when more than one declared key would fit -- a guess
+ * between two is a guess. Everything renamed is said in the NOTE, so the next
+ * call can be spelt right in the first place.
+ */
+export const respellQuery = (
+  op: any,
+  query: unknown
+): { query: unknown; renamed: [string, string][] } => {
+  const declared = declaredQueryKeys(op);
+
+  if (!declared.length || !query || typeof query !== 'object') return { query, renamed: [] };
+
+  const allowed = new Set(declared);
+  const sent = query as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...sent };
+  const renamed: [string, string][] = [];
+  const leaf = (key: string) => key.slice(key.lastIndexOf('.') + 1);
+
+  for (const key of Object.keys(sent)) {
+    if (allowed.has(key)) continue;
+
+    const targets = declared.filter((name) => name !== key && leaf(name) === leaf(key));
+
+    if (targets.length !== 1) continue;
+
+    const [target] = targets;
+
+    // The right spelling was sent too: keep it, and leave this one to be
+    // reported as ignored rather than overwrite a value the caller chose.
+    if (target in out) continue;
+
+    out[target] = out[key];
+    delete out[key];
+    renamed.push([key, target]);
+  }
+
+  return { query: out, renamed };
+};
 
 /** The query parameters an indexed operation declares. */
 const declaredQueryKeys = (op: any): string[] =>
