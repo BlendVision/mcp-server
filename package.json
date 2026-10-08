@@ -1,6 +1,6 @@
 {
   "name": "@blendvision/mcp-server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Model Context Protocol server for BlendVision One API",
   "type": "module",
   "main": "./build/index.js",
