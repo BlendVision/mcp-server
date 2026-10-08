@@ -79,7 +79,7 @@ The server searches a compiled index, not the live API, and the repo ships two:
 | Index                     | Built from                              | Operations            |
 | ------------------------- | --------------------------------------- | --------------------- |
 | `data/api-index.json`     | the public (`BV_EXTERNAL`) spec         | 324, reads and writes |
-| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 34, two of them writes |
+| `data/api-index-cxm.json` | `scripts/cxm-storefront-reads.txt`      | 36, three of them writes |
 
 Both load by default. The CXM one is a curated list because CXM is not part of
 the published contract — all 342 of its storefront operations are
@@ -90,8 +90,9 @@ One entry is not CXM's at all: the org-unit listing, which is `BV_INTERNAL` too
 and so in neither index by default, and without which a task can only be
 assigned by naming every person in a department one by one.
 
-Two entries are writes — `POST …/programs` and `POST …/tasks`, so an agent can
-create a course and assign it — and being listed is not permission. `call_api` refuses a mutating `/cxm/` call
+Three entries are writes — `POST …/programs`, `POST …/tasks` and
+`PUT …/tasks/{task.id}`, so an agent can create a course, assign it, and change
+the assignment afterwards — and being listed is not permission. `call_api` refuses a mutating `/cxm/` call
 unless that exact `"METHOD path"` appears in **`BLENDVISION_CXM_WRITES`** (a
 comma-separated list; `*` for all of them, and the older boolean
 `BLENDVISION_ALLOW_CXM_WRITES` still means `*`). A deployment that sets nothing
@@ -100,8 +101,14 @@ is read-only even with the write indexed.
 Per operation rather than a single switch, because "let the agent create a
 course" and "let the agent delete every course" are different decisions — one
 is undoable by hand and the other is not. Note what stays out of the index
-entirely: `PUT`/`DELETE` on a program, permission updates, and every task and
-licensed-content write.
+entirely: `PUT`/`DELETE` on a program, permission updates, deleting or
+terminating a task, and every licensed-content write.
+
+The task update is a full replace — contents and assignee sources are rewritten
+from the body, and a manual end is cleared — so a caller must read the whole
+task and send it back with only the asked-for change. It is indexed for
+agent-server's `propose_task_update`, which builds that body in code; a
+deployment with no such caller should leave it out of `BLENDVISION_CXM_WRITES`.
 
 Set `BLENDVISION_API_INDEX` to a comma-separated list to replace both — with
 the `/bv` file alone to drop CXM entirely, or with your own slice:
