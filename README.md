@@ -336,6 +336,60 @@ See [deploy/k8s/README.md](deploy/k8s/README.md) for images, ingress and scaling
 Plain Docker works the same way — `docker build -t blendvision-mcp . && docker run
 -p 3000:3000 blendvision-mcp` — and answers `GET /health`.
 
+### How the credential reaches it
+
+In the `Authorization` header, and nowhere else:
+
+```bash
+curl -X POST https://your-host/mcp \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+```
+
+Earlier builds also read the token from `/mcp/<token>` and `?token=`. Both are
+gone. The MCP authorization spec says access tokens **MUST NOT** appear in the
+URI query string, and a path segment is the same mistake wearing a different
+hat — either way the credential travels in the request line, and from there
+into every access log, proxy trace and browser history that records a URL.
+Those routes still answer, with a `401` that says to use the header, so an
+existing caller gets told rather than left guessing at a 404.
+
+### OAuth
+
+Set `BLENDVISION_OAUTH_ISSUER` and the connector becomes an OAuth 2.1 resource
+server: it publishes RFC 9728 metadata, challenges unauthenticated requests
+with `WWW-Authenticate`, verifies the token's signature, expiry and audience
+against that authorization server, and enforces scopes per operation.
+
+| Variable | Meaning |
+| :-- | :-- |
+| `BLENDVISION_OAUTH_ISSUER` | The authorization server's issuer URL. Setting it is what enables OAuth mode; leaving it unset keeps today's behaviour. |
+| `BLENDVISION_OAUTH_RESOURCE` | This server's canonical URI, the `aud` every token must carry. Derived from the forwarded host when unset, which is what a deployment behind a load balancer wants. |
+| `BLENDVISION_OAUTH_SCOPES` | Overrides the advertised `scopes_supported`. Defaults to `mcp.read mcp.cxm.write`. |
+
+Two scopes, matching the two decisions that actually differ: `mcp.read` for
+everything the bundled index exposes, and `mcp.cxm.write` for the CXM writes
+**this deployment** permits. Which individual writes those are stays with
+`BLENDVISION_CXM_WRITES` — the scope says whether this person delegated write
+capability at all, the allowlist says which operations the deployment will
+attempt. A call that needs a scope the token lacks gets `403` with
+`error="insufficient_scope"` and the scope to step up to.
+
+**OAuth mode is not yet usable end to end.** A token minted for this server
+must not be replayed against `api.one.blendvision.com` — that is the
+confused-deputy case the audience check exists to prevent — so acting as the
+user needs an RFC 8693 exchange at the authorization server, which does not
+exist yet. Until it does, a verified in-scope request is answered with `501`
+rather than a quiet pass-through. See
+[#19](https://github.com/BlendVision/mcp-server/issues/19).
+
+Verify the whole path against a throwaway authorization server with:
+
+```bash
+npm run build && npm run test:oauth
+```
+
 ## API Reference
 
 This MCP server wraps the BlendVision One API. For detailed API documentation, visit:

@@ -10,11 +10,21 @@ import {
 import { BlendVisionClient } from './client.js';
 import { LibraryTools } from './tools/library_tools.js';
 import { ConfigurationTools } from './tools/configuration_tools.js';
-import { ApiTools } from './tools/api_tools.js';
+import { ApiTools, requiresCxmWriteScope } from './tools/api_tools.js';
 import { VODTools } from './tools/vod_tools.js';
 import { ToolRegistry } from './tools/tool_registry.js';
 import type { BlendVisionConfig } from './types.js';
 import express from 'express';
+import {
+  CXM_WRITE_SCOPE,
+  READ_SCOPE,
+  canonicalResource,
+  challengeHeader,
+  metadataUrl,
+  oauthConfigFromEnv,
+  protectedResourceMetadata,
+  verifyAccessToken,
+} from './oauth.js';
 
 
 // Definitions for tools whose schema is large enough that keeping a second
@@ -1520,26 +1530,169 @@ async function main() {
   const app = express();
   app.use(express.json());
 
-  // Extract token from Authorization header, query param, or path param
-  function extractToken(req: express.Request): string | undefined {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      return authHeader.slice(7);
+  // Undefined unless the deployment names an authorization server, in which
+  // case every request is verified against it. See src/oauth.ts.
+  const oauth = oauthConfigFromEnv();
+
+  /**
+   * What this server calls itself, from the request.
+   *
+   * Taken from the forwarded headers because the only deployment that matters
+   * sits behind a load balancer that terminates TLS: req.protocol would say
+   * `http` and the audience would never match a token minted for the https
+   * URL. BLENDVISION_OAUTH_RESOURCE overrides it outright where that guess is
+   * wrong.
+   */
+  function resourceFor(req: express.Request): string {
+    if (!oauth) return '';
+
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+    const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+
+    return canonicalResource(oauth, {
+      proto: forwardedProto || req.protocol || 'https',
+      host: forwardedHost || req.get('host') || 'localhost',
+    });
+  }
+
+  if (oauth) {
+    // RFC 9728. Served at both the bare well-known path and the one with this
+    // resource's path appended, because that is the one a client derives from
+    // a resource at /mcp and the bare path is what a human will try.
+    const metadata = (req: express.Request, res: express.Response) => {
+      res.json(protectedResourceMetadata(oauth, resourceFor(req)));
+    };
+
+    app.get('/.well-known/oauth-protected-resource', metadata);
+    app.get('/.well-known/oauth-protected-resource/mcp', metadata);
+  }
+
+  /**
+   * The access token, from the Authorization header and nowhere else.
+   *
+   * The MCP authorization spec states that access tokens MUST NOT be included
+   * in the URI query string, and a path segment is the same mistake wearing a
+   * different hat: either way the credential lands in the request line, and
+   * from there in every access log, proxy trace and browser history that
+   * records a URL. Callers that still send one get told, rather than silently
+   * failing to authenticate.
+   */
+  function bearerToken(req: express.Request): string | undefined {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer ')) return undefined;
+
+    return header.slice(7).trim() || undefined;
+  }
+
+  function tokenIsInUrl(req: express.Request): boolean {
+    return Boolean(req.params?.token || req.query?.token);
+  }
+
+  /**
+   * Which scopes this request needs, read from the JSON-RPC body before the
+   * tools run.
+   *
+   * Deciding here rather than inside the tool is what lets an insufficient
+   * scope be an HTTP 403 with a step-up challenge, which a client can act on,
+   * instead of a tool error it can only report. Every request needs the read
+   * scope; only a guarded, mutating CXM call through call_api needs more. The
+   * hand-written tools reach /bv/ only, which is a published contract guarded
+   * by the caller's own authorization, and is deliberately not gated here.
+   */
+  function requiredScopes(body: unknown): string[] {
+    const scopes = new Set<string>([READ_SCOPE]);
+
+    for (const entry of Array.isArray(body) ? body : [body]) {
+      const rpc = entry as { method?: string; params?: { name?: string; arguments?: Record<string, unknown> } };
+
+      if (rpc?.method !== 'tools/call' || rpc.params?.name !== 'call_api') continue;
+
+      const args = rpc.params.arguments || {};
+      if (requiresCxmWriteScope(String(args.method || ''), String(args.path || ''))) {
+        scopes.add(CXM_WRITE_SCOPE);
+      }
     }
-    if (req.params.token) {
-      return req.params.token as string;
+
+    return [...scopes];
+  }
+
+  function refuse(
+    req: express.Request,
+    res: express.Response,
+    message: string,
+    options: { status?: number; error?: string; scope?: string } = {}
+  ) {
+    if (oauth) {
+      res.setHeader(
+        'WWW-Authenticate',
+        challengeHeader({
+          resourceMetadata: metadataUrl(resourceFor(req)),
+          error: options.error,
+          errorDescription: options.error ? message : undefined,
+          scope: options.scope,
+        })
+      );
     }
-    return req.query.token as string | undefined;
+
+    res.status(options.status ?? 401).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message },
+      id: null,
+    });
   }
 
   // Stateless MCP handler: each request creates a fresh server + transport
   function mcpHandler(req: express.Request, res: express.Response) {
     (async () => {
-      const token = extractToken(req);
+      const token = bearerToken(req);
+
       if (!token) {
-        res.status(401).json({
+        refuse(
+          req,
+          res,
+          tokenIsInUrl(req)
+            ? 'Tokens in the URL are not accepted. Send the credential as "Authorization: Bearer <token>".'
+            : 'Missing API token.'
+        );
+        return;
+      }
+
+      if (oauth) {
+        const verification = await verifyAccessToken(token, oauth, resourceFor(req));
+
+        if (!verification.ok) {
+          refuse(req, res, `Invalid access token: ${verification.reason}`, { error: 'invalid_token' });
+          return;
+        }
+
+        const missing = requiredScopes(req.body).filter((scope) => !verification.scopes.has(scope));
+
+        if (missing.length > 0) {
+          refuse(req, res, `This operation needs ${missing.join(' ')}.`, {
+            status: 403,
+            error: 'insufficient_scope',
+            scope: missing.join(' '),
+          });
+          return;
+        }
+
+        // Verified, in scope, and still not callable -- deliberately.
+        //
+        // The token was minted for this server. Replaying it against
+        // api.one.blendvision.com is precisely the confused-deputy case the
+        // audience check above exists to prevent, so acting as this user needs
+        // a credential obtained by exchanging their token at the authorization
+        // server (RFC 8693). That exchange is platform-side work and does not
+        // exist yet. Refusing loudly is the only honest option: the
+        // alternative is a pass-through that quietly undoes the rest of this.
+        res.status(501).json({
           jsonrpc: '2.0',
-          error: { code: -32000, message: 'Missing API token.' },
+          error: {
+            code: -32000,
+            message:
+              'OAuth mode is enabled and the token is valid, but this server cannot yet exchange it ' +
+              'for a BlendVision API credential. See BlendVision/mcp-server#19.',
+          },
           id: null,
         });
         return;
@@ -1576,10 +1729,11 @@ async function main() {
     });
   }
 
-  // Routes: support both /mcp?token=xxx and /mcp/:token
   app.post('/mcp', mcpHandler);
   app.get('/mcp', mcpHandler);
   app.delete('/mcp', mcpHandler);
+  // Still routed, so that a caller using the old shape gets the message above
+  // rather than a 404 to puzzle over. The token in it is never read.
   app.post('/mcp/:token', mcpHandler);
   app.get('/mcp/:token', mcpHandler);
   app.delete('/mcp/:token', mcpHandler);
@@ -1592,6 +1746,9 @@ async function main() {
   app.listen(PORT, () => {
     console.error(`BlendVision MCP Server running on http://localhost:${PORT}`);
     console.error(`MCP endpoint: http://localhost:${PORT}/mcp`);
+    if (oauth) {
+      console.error(`OAuth resource server: issuer ${oauth.issuer}, scopes ${oauth.scopesSupported.join(' ')}`);
+    }
   });
 }
 

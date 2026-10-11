@@ -110,9 +110,6 @@ interface ApiIndex {
 }
 
 export class ApiTools extends BaseTool {
-  private index?: ApiIndex;
-  private indexError?: string;
-
   static registerTools(registry: ToolRegistry, instance: ApiTools): void {
     const orgIdProperty = {
       orgId: {
@@ -216,88 +213,12 @@ export class ApiTools extends BaseTool {
   }
 
   /**
-   * Loaded on first use, not at startup: a deployment with a missing or broken
-   * index should fail that call with a readable message, not refuse to serve
-   * the hand-written tools.
+   * Delegates to the module-level cache; see loadApiIndex.
    */
   private loadIndex(): ApiIndex {
-    if (this.index) return this.index;
-    if (this.indexError) throw new Error(this.indexError);
-
-    const fromEnv = process.env.BLENDVISION_API_INDEX;
-    const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'data');
-    // Two bundled indexes rather than one: the /bv index is compiled from the
-    // published external spec, the CXM one from a reviewed slice of the internal
-    // spec (scripts/cxm-storefront-reads.txt). Keeping them apart is what makes
-    // that slice reviewable -- and lets a deployment drop it by pointing
-    // BLENDVISION_API_INDEX at the /bv file alone.
-    const files = (fromEnv ? fromEnv.split(',') : [join(dataDir, 'api-index.json'), join(dataDir, 'api-index-cxm.json')])
-      .map((f) => f.trim())
-      .filter(Boolean);
-
-    try {
-      const merged = this.mergeIndexes(files);
-
-      this.index = merged;
-      return merged;
-    } catch (error) {
-      this.indexError =
-        `could not load the API index from ${files.join(', ')}` +
-        `${fromEnv ? ' (BLENDVISION_API_INDEX)' : ''}: ` +
-        `${error instanceof Error ? error.message : String(error)}`;
-      throw new Error(this.indexError);
-    }
+    return loadApiIndex();
   }
 
-  /**
-   * Read and concatenate index files. A bundled file that is absent is skipped
-   * -- a build that ships only the /bv index still works -- but a file named
-   * explicitly through BLENDVISION_API_INDEX must exist, or the deployment is
-   * silently narrower than whoever configured it believes.
-   */
-  private mergeIndexes(files: string[]): ApiIndex {
-    const explicit = !!process.env.BLENDVISION_API_INDEX;
-    const operations: Operation[] = [];
-    const definitions: Record<string, any> = {};
-    const titles: string[] = [];
-    let loaded = 0;
-
-    for (const file of files) {
-      let raw: string;
-
-      try {
-        raw = readFileSync(file, 'utf8');
-      } catch (error) {
-        if (!explicit && (error as { code?: string }).code === 'ENOENT') continue;
-        throw error;
-      }
-
-      const parsed = JSON.parse(raw) as ApiIndex;
-
-      if (!Array.isArray(parsed.operations)) {
-        throw new Error(`${file}: no operations array`);
-      }
-
-      loaded += 1;
-      operations.push(...parsed.operations);
-      // First definition of a name wins; the shared type names that appear in
-      // both specs are the same message either way.
-      for (const [name, schema] of Object.entries(parsed.definitions || {})) {
-        if (!(name in definitions)) definitions[name] = schema;
-      }
-      if (parsed.info?.title) titles.push(parsed.info.title);
-    }
-
-    if (!loaded) {
-      throw new Error('no index file could be read');
-    }
-
-    return {
-      info: { title: titles.join(' + '), operationCount: operations.length },
-      operations,
-      definitions,
-    };
-  }
 
   async searchApi(params: any) {
     try {
@@ -782,4 +703,130 @@ function summarizeResponses(
   }
 
   return out;
+}
+
+
+/**
+ * The compiled index, read once per process rather than once per request.
+ *
+ * Every MCP request builds a fresh session server and therefore a fresh
+ * ApiTools, so an instance-level cache re-read both JSON files from disk on
+ * every call. They do not change for the life of the process, and the HTTP
+ * layer needs the same index to decide which scope a call requires, so the
+ * cache belongs out here.
+ */
+let cachedIndex: ApiIndex | undefined;
+let cachedIndexError: string | undefined;
+
+/**
+ * Loaded on first use, not at startup: a deployment with a missing or broken
+ * index should fail that call with a readable message, not refuse to serve
+ * the hand-written tools.
+ */
+export function loadApiIndex(): ApiIndex {
+  if (cachedIndex) return cachedIndex;
+  if (cachedIndexError) throw new Error(cachedIndexError);
+
+  const fromEnv = process.env.BLENDVISION_API_INDEX;
+  const dataDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'data');
+  // Two bundled indexes rather than one: the /bv index is compiled from the
+  // published external spec, the CXM one from a reviewed slice of the internal
+  // spec (scripts/cxm-storefront-reads.txt). Keeping them apart is what makes
+  // that slice reviewable -- and lets a deployment drop it by pointing
+  // BLENDVISION_API_INDEX at the /bv file alone.
+  const files = (fromEnv ? fromEnv.split(',') : [join(dataDir, 'api-index.json'), join(dataDir, 'api-index-cxm.json')])
+    .map((f) => f.trim())
+    .filter(Boolean);
+
+  try {
+    const merged = mergeIndexes(files);
+
+    cachedIndex = merged;
+    return merged;
+  } catch (error) {
+    cachedIndexError =
+      `could not load the API index from ${files.join(', ')}` +
+      `${fromEnv ? ' (BLENDVISION_API_INDEX)' : ''}: ` +
+      `${error instanceof Error ? error.message : String(error)}`;
+    throw new Error(cachedIndexError);
+  }
+}
+
+/**
+ * Read and concatenate index files. A bundled file that is absent is skipped
+ * -- a build that ships only the /bv index still works -- but a file named
+ * explicitly through BLENDVISION_API_INDEX must exist, or the deployment is
+ * silently narrower than whoever configured it believes.
+ */
+function mergeIndexes(files: string[]): ApiIndex {
+  const explicit = !!process.env.BLENDVISION_API_INDEX;
+  const operations: Operation[] = [];
+  const definitions: Record<string, any> = {};
+  const titles: string[] = [];
+  let loaded = 0;
+
+  for (const file of files) {
+    let raw: string;
+
+    try {
+      raw = readFileSync(file, 'utf8');
+    } catch (error) {
+      if (!explicit && (error as { code?: string }).code === 'ENOENT') continue;
+      throw error;
+    }
+
+    const parsed = JSON.parse(raw) as ApiIndex;
+
+    if (!Array.isArray(parsed.operations)) {
+      throw new Error(`${file}: no operations array`);
+    }
+
+    loaded += 1;
+    operations.push(...parsed.operations);
+    // First definition of a name wins; the shared type names that appear in
+    // both specs are the same message either way.
+    for (const [name, schema] of Object.entries(parsed.definitions || {})) {
+      if (!(name in definitions)) definitions[name] = schema;
+    }
+    if (parsed.info?.title) titles.push(parsed.info.title);
+  }
+
+  if (!loaded) {
+    throw new Error('no index file could be read');
+  }
+
+  return {
+    info: { title: titles.join(' + '), operationCount: operations.length },
+    operations,
+    definitions,
+  };
+}
+
+/**
+ * Whether this call needs the CXM write scope.
+ *
+ * Asked by the transport before a tool runs, so that a missing scope can be a
+ * 403 with a step-up challenge rather than a tool error the client cannot act
+ * on. It answers from the operation's declared action, exactly as the guard in
+ * call_api does -- 28 CXM operations are POST with ACTION_READ, and a
+ * method-based answer here would demand a write scope to read them.
+ *
+ * Unknown paths return false: call_api rejects them anyway, with a better
+ * message than a scope challenge would give.
+ */
+export function requiresCxmWriteScope(method: string, path: string): boolean {
+  if (!path || !path.startsWith(GUARDED_PREFIX)) return false;
+
+  let index: ApiIndex;
+  try {
+    index = loadApiIndex();
+  } catch {
+    // No index, no call; call_api will fail with the readable message.
+    return false;
+  }
+
+  const matches = findOperations(index, path, method);
+  if (matches.length === 0) return false;
+
+  return isMutating(matches[0], method);
 }
