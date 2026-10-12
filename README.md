@@ -376,6 +376,14 @@ capability at all, the allowlist says which operations the deployment will
 attempt. A call that needs a scope the token lacks gets `403` with
 `error="insufficient_scope"` and the scope to step up to.
 
+**BlendVision tokens keep working, permanently.** OAuth mode adds a way in; it
+does not close the existing one. A token is routed by its issuer: one naming
+`BLENDVISION_OAUTH_ISSUER` is an OAuth token and is verified in full here, with no
+fallback; anything else — orbit's own login and API tokens carry `iss: "orbit"` — is
+passed to the BlendVision API exactly as before, and the API verifies it. This is
+what keeps agent-server working: it calls this server with each CXM user's own
+orbit token, and CXM is not moving to OAuth.
+
 **OAuth mode is not yet usable end to end.** A token minted for this server
 must not be replayed against `api.one.blendvision.com` — that is the
 confused-deputy case the audience check exists to prevent — so acting as the

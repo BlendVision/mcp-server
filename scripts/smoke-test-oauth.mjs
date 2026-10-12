@@ -152,15 +152,45 @@ try {
 
   // --- token validation ----------------------------------------------------
   {
-    const response = await rpc(initialize, 'not-a-jwt');
-    check('a malformed token is 401', response.status === 401, response.status);
-    check('a malformed token says invalid_token', (response.headers.get('www-authenticate') || '').includes('error="invalid_token"'));
-  }
-
-  {
     const foreign = await mint({ scope: 'mcp.read', audience: 'https://someone-else.example/mcp' });
     const response = await rpc(initialize, foreign);
     check('a token minted for another audience is refused', response.status === 401, response.status);
+    check('and says invalid_token', (response.headers.get('www-authenticate') || '').includes('error="invalid_token"'));
+  }
+
+  {
+    // Claims our issuer, signed by a key the authorization server never published.
+    // Naming the issuer commits a token to full verification: there is no fallback.
+    const { privateKey: stranger } = await generateKeyPair('RS256');
+    const forged = await new SignJWT({ scope: 'mcp.read' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+      .setIssuer(ISSUER)
+      .setAudience(RESOURCE)
+      .setSubject('user-1')
+      .setExpirationTime('5m')
+      .sign(stranger);
+    const response = await rpc(initialize, forged);
+    check('a token claiming our issuer with a forged signature is refused', response.status === 401, response.status);
+  }
+
+  // --- BlendVision tokens keep working in OAuth mode -------------------------
+  // agent-server forwards each CXM AiSK user's own orbit token, and CXM is not
+  // moving to OAuth. Those tokens must go to the API exactly as before; it is
+  // the API that verifies them, not this server.
+  {
+    const { privateKey: orbitKey } = await generateKeyPair('RS256');
+    const orbitToken = await new SignJWT({ token_use: 'login_access', org_id: 'org-1' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'orbit-key' })
+      .setIssuer('orbit')
+      .setSubject('account-1')
+      .setExpirationTime('5m')
+      .sign(orbitKey);
+
+    const response = await rpc(initialize, orbitToken);
+    check('an orbit-issued token is passed through, not challenged', response.status === 200, response.status);
+
+    const opaque = await rpc(initialize, 'opaque-legacy-credential');
+    check('a non-JWT token is left for the API to judge', opaque.status === 200, opaque.status);
   }
 
   // --- scopes --------------------------------------------------------------

@@ -21,6 +21,7 @@ import {
   canonicalResource,
   challengeHeader,
   metadataUrl,
+  isOAuthToken,
   oauthConfigFromEnv,
   protectedResourceMetadata,
   verifyAccessToken,
@@ -1657,7 +1658,10 @@ async function main() {
         return;
       }
 
-      if (oauth) {
+      // OAuth tokens are verified here. A BlendVision token -- notably the one
+      // agent-server forwards for every CXM AiSK user -- falls through to the
+      // path below unchanged, OAuth mode or not. See isOAuthToken.
+      if (oauth && isOAuthToken(token, oauth)) {
         const verification = await verifyAccessToken(token, oauth, resourceFor(req));
 
         if (!verification.ok) {

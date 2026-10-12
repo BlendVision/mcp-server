@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from 'jose';
 
 /**
  * OAuth 2.1 resource-server concerns, kept apart from the transport so the
@@ -10,6 +10,13 @@ import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
  * BLENDVISION_OAUTH_ISSUER. With that unset the whole module is inert and the
  * connector keeps accepting a BlendVision API token in the Authorization
  * header, which is how every current deployment works.
+ *
+ * OAuth mode does not replace the BlendVision credential; it sits beside it,
+ * permanently. agent-server -- the CXM AiSK path -- calls this server with the
+ * user's own orbit token, and CXM is not moving to OAuth. So a token is routed
+ * by who issued it: one from the configured issuer is an OAuth token and is
+ * verified in full here; anything else is a BlendVision token and goes to the
+ * API exactly as it always has, where the API verifies it. See isOAuthToken.
  *
  * What is deliberately NOT here: obtaining a BlendVision API credential for the
  * verified user. A token minted for this server must not be replayed against
@@ -209,5 +216,25 @@ export async function verifyAccessToken(
     return { ok: true, claims: payload, scopes: scopesOf(payload) };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/**
+ * Whether a bearer token claims to come from the configured authorization
+ * server, and so must be verified here as an OAuth access token.
+ *
+ * Decided from the unverified `iss`, which is safe because it only chooses the
+ * stricter path: a token that names our issuer is held to full verification
+ * with no fallback, so forging the claim gains nothing. A token that names
+ * anyone else -- orbit's own login and API tokens carry `iss: "orbit"` -- is a
+ * BlendVision credential and is left for the BlendVision API to verify, as it
+ * is with OAuth mode off. An opaque or malformed token is treated the same way;
+ * the API is the authority on it, not this server.
+ */
+export function isOAuthToken(token: string, config: OAuthConfig): boolean {
+  try {
+    return decodeJwt(token).iss === config.issuer;
+  } catch {
+    return false;
   }
 }
