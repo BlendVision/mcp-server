@@ -7,10 +7,10 @@
 # the reviewed subset an agent may reach -- reads only, and only the ones a
 # question about courses, content, spaces or assigned learning actually needs.
 #
-# Reads, plus two writes -- creating a program and creating a task -- listed
-# because an agent that cannot see an operation cannot call it, and the AiSK
-# router's "build me a course from these videos" and "assign it to Nick" flows
-# need them. Being listed is not permission: `call_api` still refuses a
+# Reads, plus three writes -- creating a program, creating a task and updating
+# one -- listed because an agent that cannot see an operation cannot call it,
+# and the AiSK router's "build me a course from these videos", "assign it to
+# Nick" and "move its end date" flows need them. Being listed is not permission: `call_api` still refuses a
 # mutating /cxm/ call unless that exact "METHOD path" appears in
 # BLENDVISION_CXM_WRITES, so a deployment that sets nothing is read-only even
 # with both writes indexed.
@@ -165,6 +165,23 @@ POST /cxm/storefront/v1alpha1/programs
 # everyone it assigns, which is why it is the one entry here that a deployment
 # should think about before naming it in BLENDVISION_CXM_WRITES.
 POST /cxm/storefront/v1alpha1/tasks
+
+# --- The third write: changing a task that already exists ---
+# "Move this task's end date to 12/31", "add the new course to it", "take Neal
+# off it". Listed for the same reason as the create: without it the agent can
+# assign work and then cannot touch it, and the answer to 「把結束時間改到
+# 12/31」 was "this cannot be done here".
+#
+# This one is the least forgiving of the three, and the agent must never build
+# its body by hand. UpdateTask is a FULL REPLACE: contents and the assignee
+# sources are rewritten from the request, so a body carrying only the new date
+# would delete every course and every person on the task. It also clears a
+# manual end -- a task someone ended early reopens -- and reschedules the
+# task's notifications. The caller has to read the whole task, change only what
+# was asked, and send the rest back exactly as it was; agent-server's
+# propose_task_update does that in code and refuses the task kinds it cannot
+# round-trip safely (objective, IDP-created, suspended, manually ended).
+PUT /cxm/storefront/v1alpha1/tasks/{task.id}
 
 # --- Assigning to a unit instead of to everyone in it ---
 # CreateTask takes `assignee_org_units` -- one uuid per unit, expanded by the
