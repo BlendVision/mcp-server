@@ -22,6 +22,10 @@ export class BlendVisionClient {
     this.client = axios.create({
       baseURL: baseUrl,
       headers,
+      // An array in the query goes as the key repeated -- `ids=a&ids=b`, which is what grpc-gateway
+      // reads. axios writes `ids[]=a&ids[]=b` by default, and the gateway takes that as one empty
+      // value: `filter.content_ids[0]: value is empty, which is not a valid UUID`.
+      paramsSerializer: { indexes: null },
     });
   }
 
